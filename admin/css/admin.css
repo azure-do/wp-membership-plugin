@@ -1,0 +1,502 @@
+/**
+ * LFT Membership 管理画面スタイル
+ * ユーザー管理・ユーザーリスト・モーダル
+ */
+
+.lft-membership-wrap {
+	margin: 0 -20px 0 -22px;
+}
+
+.lft-membership-admin {
+	display: flex;
+	min-height: calc(100vh - 32px);
+	background: #f0f0f1;
+}
+
+/* ========== サイドバー ========== */
+.lft-membership-sidebar {
+	width: 220px;
+	background: #1d2327;
+	color: #f0f0f1;
+	flex-shrink: 0;
+}
+
+.lft-membership-sidebar__header {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 20px 16px;
+	font-size: 15px;
+	font-weight: 600;
+	border-bottom: 1px solid #2c3338;
+}
+
+.lft-membership-sidebar__header .dashicons {
+	font-size: 22px;
+	width: 22px;
+	height: 22px;
+}
+
+.lft-membership-sidebar__nav {
+	padding: 12px 0;
+}
+
+.lft-membership-nav-item {
+	display: block;
+	padding: 10px 20px;
+	color: #c3c4c7;
+	text-decoration: none;
+	font-size: 14px;
+	transition: background 0.15s ease, color 0.15s ease;
+}
+
+.lft-membership-nav-item:hover {
+	color: #fff;
+	background: #2c3338;
+}
+
+.lft-membership-nav-item--active {
+	color: #fff;
+	background: #2271b1;
+}
+
+/* ========== メイン ========== */
+.lft-membership-main {
+	flex: 1;
+	padding: 24px 32px 32px;
+	background: #fff;
+	margin: 20px 20px 20px 0;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+	border-radius: 4px;
+}
+
+.lft-membership-title {
+	margin: 0 0 20px;
+	font-size: 23px;
+	font-weight: 400;
+}
+
+/* ツールバー: 検索 + 追加 */
+.lft-membership-toolbar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+	margin-bottom: 20px;
+	flex-wrap: wrap;
+}
+
+.lft-membership-search {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.lft-membership-search__input {
+	width: 260px;
+	padding: 6px 12px;
+	border: 1px solid #8c8f94;
+	border-radius: 4px;
+	font-size: 14px;
+}
+
+.lft-membership-search__input::placeholder {
+	color: #787c82;
+}
+
+.lft-membership-btn-add {
+	background: #2271b1;
+	color: #fff;
+	border-color: #2271b1;
+}
+
+.lft-membership-btn-add:hover {
+	background: #135e96;
+	border-color: #135e96;
+	color: #fff;
+}
+
+/* テーブル */
+.lft-membership-table-wrap {
+	overflow-x: auto;
+	margin-bottom: 20px;
+}
+
+.lft-membership-table {
+	margin: 0;
+}
+
+.lft-membership-table th,
+.lft-membership-table td {
+	padding: 10px 12px;
+	font-size: 13px;
+}
+
+.lft-membership-table .column-no { width: 2em; }
+.lft-membership-table .column-user-id { width: 80px; }
+.lft-membership-table .column-user-name { width: 140px; }
+.lft-membership-table .column-email { width: 140px; }
+.lft-membership-table .column-company { width: 160px; }
+.lft-membership-table .column-payment,
+.lft-membership-table .column-deadline,
+.lft-membership-table .column-reg-date { width: 80px; }
+.lft-membership-table .column-status { width: 110px; }
+.lft-membership-table .column-link { width: 200px; }
+.lft-membership-table .column-actions { width: 40px; }
+
+.lft-membership-table .row-actions {
+	font-size: 12px;
+	margin-top: 4px;
+}
+
+.lft-membership-table .row-actions a {
+	text-decoration: none;
+}
+.lft-membership-table .row-actions .lft-delete {
+	color: #d22323;
+}
+
+.lft-status-badge {
+	display: inline-block;
+	padding: 4px 10px;
+	border-radius: 4px;
+	font-size: 12px;
+	font-weight: 500;
+}
+
+.lft-status-active {
+	background: #00a32a;
+	color: #fff;
+}
+
+.lft-status-suspended {
+	background: #d63638;
+	color: #fff;
+}
+
+.lft-status-expired {
+	background: #1d2327;
+	color: #fff;
+}
+
+.lft-status-pending {
+	background: #72aee6;
+	color: #fff;
+}
+
+.lft-token-short {
+	font-size: 11px;
+	background: #f0f0f1;
+	padding: 2px 6px;
+	border-radius: 3px;
+}
+
+/* コピーボタン・クリップボードアイコン */
+.lft-copy-url.lft-copy-btn,
+.lft-copy-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 4px;
+	padding: 2px 4px;
+	margin-left: 6px;
+	min-width: 25px;
+	height: 25px;
+	// border: 1px solid #8c8f94;
+	border: none;
+	border-radius: 4px;
+	background: #f6f7f7;
+	color: #1d2327;
+	cursor: pointer;
+	vertical-align: middle;
+	transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.lft-copy-btn:hover {
+	background: #dcdcde;
+	border-color: #1d2327;
+}
+
+.lft-icon-copy,
+.lft-icon-recreate {
+	flex-shrink: 0;
+	vertical-align: middle;
+}
+
+.lft-copy-btn span {
+	font-size: 12px;
+}
+
+/* 一時停止・再開ボタン（アイコン統一スタイル） */
+.lft-toggle-status {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 25px;
+	height: 25px;
+	padding: 0;
+	// border: 1px solid transparent;
+	border: none;
+	border-radius: 4px;
+	cursor: pointer;
+	transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.lft-btn-suspend {
+	background: #f0f0f1;
+	color: #b32d2e;
+	// border-color: #d63638;
+}
+
+.lft-btn-suspend:hover {
+	background: #d63638;
+	color: #fff;
+}
+
+.lft-btn-resume {
+	background: #f0f0f1;
+	color: #00a32a;
+	border-color: #00a32a;
+}
+
+.lft-btn-resume:hover {
+	background: #00a32a;
+	color: #fff;
+}
+
+.lft-icon-play {
+	display: inline-block;
+	vertical-align: middle;
+}
+
+/* 一時停止：縦線2本 */
+.lft-icon-pause {
+	position: relative;
+	width: 14px;
+	height: 14px;
+}
+
+.lft-icon-pause::before,
+.lft-icon-pause::after {
+	content: '';
+	position: absolute;
+	top: 0;
+	width: 3px;
+	height: 14px;
+	background: currentColor;
+	border-radius: 1px;
+}
+
+.lft-icon-pause::before { left: 2px; }
+.lft-icon-pause::after { left: 9px; }
+
+/* 再生：右向き三角 */
+.lft-icon-play {
+	width: 0;
+	height: 0;
+	border-top: 7px solid transparent;
+	border-bottom: 7px solid transparent;
+	border-left: 12px solid currentColor;
+	margin-left: 2px;
+}
+
+.lft-action-disabled {
+	color: #787c82;
+	font-size: 13px;
+}
+
+.lft-no-items {
+	text-align: center;
+	padding: 40px 20px !important;
+	color: #646970;
+}
+
+/* ページネーション */
+.lft-membership-pagination {
+	margin-top: 16px;
+}
+
+.lft-membership-pagination .page-numbers {
+	display: inline-block;
+	padding: 6px 12px;
+	margin: 0 2px;
+	background: #f0f0f1;
+	border-radius: 4px;
+	text-decoration: none;
+	color: #1d2327;
+}
+
+.lft-membership-pagination .page-numbers.current {
+	background: #2271b1;
+	color: #fff;
+}
+
+.lft-membership-pagination .page-numbers:hover {
+	background: #dcdcde;
+}
+
+/* ========== モーダル ========== */
+.lft-membership-modal {
+	position: fixed;
+	inset: 0;
+	z-index: 100100;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 20px;
+	opacity: 0;
+	visibility: hidden;
+	transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+
+.lft-membership-modal.is-open {
+	opacity: 1;
+	visibility: visible;
+}
+
+.lft-membership-modal__backdrop {
+	position: absolute;
+	inset: 0;
+	background: rgba(0, 0, 0, 0.5);
+}
+
+.lft-membership-modal__box {
+	position: relative;
+	width: 100%;
+	max-width: 600px;
+	max-height: 90vh;
+	overflow: auto;
+	background: #fff;
+	border-radius: 4px;
+	box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+}
+
+.lft-membership-modal__header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 16px 20px;
+	border-bottom: 1px solid #dcdcde;
+}
+
+.lft-membership-modal__header h2 {
+	margin: 0;
+	font-size: 18px;
+	font-weight: 600;
+}
+
+.lft-membership-modal__close {
+	background: none;
+	border: none;
+	font-size: 28px;
+	line-height: 1;
+	color: #787c82;
+	cursor: pointer;
+	padding: 0;
+	width: 32px;
+	height: 32px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 4px;
+}
+
+.lft-membership-modal__close:hover {
+	color: #1d2327;
+	background: #f0f0f1;
+}
+
+.lft-membership-modal__body {
+	padding: 20px;
+}
+
+/* フォーム */
+.lft-membership-form .lft-form-row {
+	margin-bottom: 16px;
+}
+
+.lft-membership-form .lft-form-row--two {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 16px;
+}
+
+.lft-form-field label {
+	display: block;
+	margin-bottom: 4px;
+	font-weight: 600;
+	font-size: 13px;
+}
+
+.lft-form-field .required {
+	color: #d63638;
+}
+
+.lft-form-field input[type="text"],
+.lft-form-field input[type="email"],
+.lft-form-field input[type="date"] {
+	width: 100%;
+	padding: 8px 12px;
+	border: 1px solid #8c8f94;
+	border-radius: 4px;
+	font-size: 14px;
+}
+
+.lft-form-row--token .lft-token-wrap {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+.lft-form-row--token .lft-field-access-url {
+	flex: 1;
+	min-width: 200px;
+	padding: 8px 12px;
+	background: #f6f7f7;
+	border: 1px solid #c3c4c7;
+	border-radius: 4px;
+	font-size: 13px;
+	color: #1d2327;
+}
+
+.lft-form-actions {
+	display: flex;
+	gap: 12px;
+	margin-top: 24px;
+	padding-top: 20px;
+	border-top: 1px solid #dcdcde;
+}
+
+.lft-btn-confirm {
+	background: #00a32a !important;
+	border-color: #00a32a !important;
+	color: #fff !important;
+}
+
+.lft-btn-confirm:hover {
+	background: #008a20 !important;
+	border-color: #008a20 !important;
+	color: #fff !important;
+}
+
+.lft-btn-cancel {
+	background: #d63638 !important;
+	border-color: #d63638 !important;
+	color: #fff !important;
+}
+
+.lft-btn-cancel:hover {
+	background: #b32d2e !important;
+	border-color: #b32d2e !important;
+	color: #fff !important;
+}
+
+/* フッター（任意） */
+.lft-membership-footer {
+	margin-top: 32px;
+	padding-top: 16px;
+	border-top: 1px solid #dcdcde;
+	font-size: 12px;
+	color: #787c82;
+}
