@@ -26,8 +26,8 @@ $login_url = home_url( '/' . LFT_MEMBERSHIP_SLUG . '/login/' );
 		</header>
 
 		<div class="lft-register-card">
-			<h2 class="lft-register-title">パスワードをお忘れですか？</h2>
-			<p class="lft-forgot-desc">ご登録のメールアドレスを入力してください。新しいアクセスURLをお送りします。そのURLからパスワードの再設定またはログインができます。</p>
+			<h2 class="lft-register-title">パスワードを忘れた方はこちら</h2>
+			<p class="lft-forgot-desc">ご登録のメールアドレスを入力してください。パスワード再設定用のメールをお送りします。そのURLからパスワードの再設定またはログインができます。</p>
 
 			<?php if ( $message ) : ?>
 				<p class="lft-register-message"><?php echo esc_html( $message ); ?></p>
@@ -44,7 +44,7 @@ $login_url = home_url( '/' . LFT_MEMBERSHIP_SLUG . '/login/' );
 						<input type="email" id="lft-forgot-email" name="email" value="" required class="lft-input" placeholder="登録時のメールアドレス" />
 					</p>
 					<p class="lft-form-actions">
-						<button type="submit" class="lft-btn lft-btn--submit">新しいアクセスURLを送信</button>
+						<button type="submit" class="lft-btn lft-btn--submit">パスワード再設定メールを送信</button>
 					</p>
 				</form>
 			<?php endif; ?>

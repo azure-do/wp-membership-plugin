@@ -19,8 +19,7 @@ $show_reset    = ! $is_standalone && ! empty($member->show_reset_form);
 if (! isset($redirect_to)) {
 	$redirect_to = home_url('/');
 }
-$login_url = home_url('/' . LFT_MEMBERSHIP_SLUG . '/login/');
-$edit_url  = home_url('/' . LFT_MEMBERSHIP_SLUG . '/edit/');
+$login_url  = home_url('/' . LFT_MEMBERSHIP_SLUG . '/login/');
 $forgot_url = home_url('/' . LFT_MEMBERSHIP_SLUG . '/forgot/');
 ?>
 <!DOCTYPE html>
@@ -29,7 +28,7 @@ $forgot_url = home_url('/' . LFT_MEMBERSHIP_SLUG . '/forgot/');
 <head>
 	<meta charset="<?php bloginfo('charset'); ?>">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
-	<title>参加 - <?php bloginfo('name'); ?></title>
+	<title>ログイン - <?php bloginfo('name'); ?></title>
 	<?php wp_head(); ?>
 </head>
 
@@ -40,7 +39,7 @@ $forgot_url = home_url('/' . LFT_MEMBERSHIP_SLUG . '/forgot/');
 		</header>
 
 		<div class="lft-register-card">
-			<h2 class="lft-register-title">参加</h2>
+			<h2 class="lft-register-title">ログイン</h2>
 
 			<?php if ($login_error) : ?>
 				<p class="lft-register-errors"><?php echo esc_html($login_error); ?></p>
@@ -59,7 +58,7 @@ $forgot_url = home_url('/' . LFT_MEMBERSHIP_SLUG . '/forgot/');
 						<input type="password" id="lft-login-password" name="pwd" required class="lft-input" placeholder="パスワードを入力" />
 					</p>
 					<p class="lft-form-actions">
-						<button type="submit" class="lft-btn lft-btn--submit">参加</button>
+						<button type="submit" class="lft-btn lft-btn--submit">ログイン</button>
 					</p>
 				</form>
 			<?php else : ?>
@@ -75,7 +74,7 @@ $forgot_url = home_url('/' . LFT_MEMBERSHIP_SLUG . '/forgot/');
 						<input type="password" id="lft-login-password" name="password" required class="lft-input" placeholder="パスワードを入力" />
 					</p>
 					<p class="lft-form-actions">
-						<button type="submit" class="lft-btn lft-btn--submit">参加</button>
+						<button type="submit" class="lft-btn lft-btn--submit">ログイン</button>
 					</p>
 				</form>
 
@@ -98,15 +97,14 @@ $forgot_url = home_url('/' . LFT_MEMBERSHIP_SLUG . '/forgot/');
 					</form>
 				<?php else : ?>
 					<?php $reset_url = home_url('/' . LFT_MEMBERSHIP_SLUG . '/new_user/' . rawurlencode($member->token) . '/?action=reset'); ?>
-					<p class="lft-login-reset-hint"><a href="<?php echo esc_url($forgot_url); ?>">パスワードをお忘れですか？</a> 新しいアクセスURLを送信できます。<br />
+					<p class="lft-login-reset-hint"><a href="<?php echo esc_url($forgot_url); ?>">パスワードを忘れた方はこちら</a> パスワード再設定メールを送信できます。<br />
 						<a href="<?php echo esc_url($reset_url); ?>">パスワードを再設定する</a>
 					</p>
 				<?php endif; ?>
 			<?php endif; ?>
 
 			<p class="lft-login-links">
-				<a href="<?php echo esc_url($edit_url); ?>">または変更したいですか？</a>
-				<a href="<?php echo esc_url($forgot_url); ?>">パスワードをお忘れですか？</a>
+				<a href="<?php echo esc_url($forgot_url); ?>">パスワードを忘れた方はこちら</a>
 			</p>
 		</div>
 	</div>

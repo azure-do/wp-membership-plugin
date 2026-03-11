@@ -29,6 +29,7 @@ class LFT_Membership_Frontend {
 		add_action( 'template_redirect', array( $this, 'handle_login_page' ), 5 );
 		add_action( 'template_redirect', array( $this, 'handle_forgot_page' ), 5 );
 		add_action( 'template_redirect', array( $this, 'handle_edit_page' ), 20 );
+		add_action( 'template_redirect', array( $this, 'handle_logout' ), 5 );
 		add_action( 'wp_enqueue_scripts', array( $this, 'maybe_enqueue_register_assets' ), 20 );
 		// テーマの the_password_form より後に出すため priority 999（どのサイトでもプラグインのログインフォームを表示）
 		add_filter( 'post_password_required', array( $this, 'filter_post_password_required' ), 10, 2 );
@@ -74,6 +75,11 @@ class LFT_Membership_Frontend {
 			'index.php?lft_membership=edit',
 			'top'
 		);
+		add_rewrite_rule(
+			$slug . '/logout/?$',
+			'index.php?lft_membership=logout',
+			'top'
+		);
 	}
 
 	public function add_query_vars( $vars ) {
@@ -113,8 +119,88 @@ class LFT_Membership_Frontend {
 		return $base . ltrim( $path_or_url, '/' );
 	}
 
+	/** 会員セッション用 Cookie 名 */
+	const COOKIE_NAME = 'lft_member_session';
+
+	/** セッション有効日数 */
+	const COOKIE_DAYS = 14;
+
+	/**
+	 * 会員ログイン用 Cookie をセット
+	 *
+	 * @param int $member_id 会員ID
+	 */
+	private function set_member_cookie( $member_id ) {
+		$expiry = time() + ( self::COOKIE_DAYS * DAY_IN_SECONDS );
+		$payload = array(
+			'id' => (int) $member_id,
+			'e'  => $expiry,
+		);
+		$sig = hash_hmac( 'sha256', $payload['id'] . '|' . $payload['e'], wp_salt( 'auth' ) );
+		$payload['sig'] = $sig;
+		$value = base64_encode( wp_json_encode( $payload ) );
+		$expire_str = gmdate( 'D, d M Y H:i:s', $expiry ) . ' GMT';
+		if ( PHP_VERSION_ID >= 70300 ) {
+			setcookie( self::COOKIE_NAME, $value, array(
+				'expires'  => $expiry,
+				'path'     => '/',
+				'secure'   => is_ssl(),
+				'httponly' => true,
+				'samesite' => 'Lax',
+			) );
+		} else {
+			setcookie( self::COOKIE_NAME, $value, $expiry, '/; samesite=Lax', '', is_ssl(), true );
+		}
+	}
+
+	/**
+	 * 会員セッション Cookie を削除（ログアウト）
+	 */
+	private function clear_member_cookie() {
+		if ( PHP_VERSION_ID >= 70300 ) {
+			setcookie( self::COOKIE_NAME, '', array(
+				'expires'  => time() - 3600,
+				'path'     => '/',
+				'secure'   => is_ssl(),
+				'httponly' => true,
+				'samesite' => 'Lax',
+			) );
+		} else {
+			setcookie( self::COOKIE_NAME, '', time() - 3600, '/', '', is_ssl(), true );
+		}
+	}
+
+	/**
+	 * 現在ログイン中の会員を取得（Cookie ベース）。プラグイン専用DBのみ使用し WP ユーザーは使わない。
+	 *
+	 * @return object|null 会員レコードまたは null
+	 */
+	public function get_current_lft_member() {
+		if ( empty( $_COOKIE[ self::COOKIE_NAME ] ) ) {
+			return null;
+		}
+		$raw = base64_decode( $_COOKIE[ self::COOKIE_NAME ], true );
+		if ( $raw === false ) {
+			return null;
+		}
+		$payload = json_decode( $raw, true );
+		if ( ! is_array( $payload ) || empty( $payload['id'] ) || empty( $payload['e'] ) || empty( $payload['sig'] ) ) {
+			return null;
+		}
+		$expected_sig = hash_hmac( 'sha256', $payload['id'] . '|' . $payload['e'], wp_salt( 'auth' ) );
+		if ( ! hash_equals( $expected_sig, $payload['sig'] ) || $payload['e'] < time() ) {
+			return null;
+		}
+		$member = LFT_Membership_DB::get_member( (int) $payload['id'] );
+		if ( ! $member || ! LFT_Membership_DB::is_member_active( $member ) ) {
+			return null;
+		}
+		return $member;
+	}
+
 	/**
 	 * 会員専用（パスワード保護）ページでは、未ログイン時はログインページへリダイレクト
+	 * 認証はプラグインの会員DB＋Cookie のみ使用（WP ユーザーではログインしない）
 	 */
 	public function redirect_protected_page_to_login() {
 		if ( ! is_singular() ) {
@@ -124,8 +210,8 @@ class LFT_Membership_Frontend {
 		if ( ! $post || ! post_password_required( $post ) ) {
 			return;
 		}
-		$user_id = get_current_user_id();
-		if ( $user_id && LFT_Membership_DB::is_user_active_member( $user_id ) ) {
+		$member = $this->get_current_lft_member();
+		if ( $member && LFT_Membership_DB::is_member_active( $member ) ) {
 			return;
 		}
 		$redirect_to = get_permalink( $post );
@@ -159,16 +245,14 @@ class LFT_Membership_Frontend {
 
 	/**
 	 * パスワード保護ページで、ログイン中の有効会員にはパスワード不要にする
+	 * 認証はプラグインの会員DB＋Cookie のみ使用
 	 */
 	public function filter_post_password_required( $required, $post ) {
 		if ( ! $required || ! $post ) {
 			return $required;
 		}
-		$user_id = get_current_user_id();
-		if ( ! $user_id ) {
-			return $required;
-		}
-		if ( LFT_Membership_DB::is_user_active_member( $user_id ) ) {
+		$member = $this->get_current_lft_member();
+		if ( $member && LFT_Membership_DB::is_member_active( $member ) ) {
 			return false;
 		}
 		return $required;
@@ -235,8 +319,10 @@ class LFT_Membership_Frontend {
 			$this->process_member_login( $redirect_to );
 			exit;
 		}
-		$user_id = get_current_user_id();
-		if ( $user_id && LFT_Membership_DB::is_user_active_member( $user_id ) ) {
+		// 既に会員Cookieでログイン済みならリダイレクト
+		$member = $this->get_current_lft_member();
+		if ( $member && LFT_Membership_DB::is_member_active( $member ) ) {
+			$redirect_to = wp_validate_redirect( $redirect_to, home_url( '/' ) );
 			wp_safe_redirect( $redirect_to );
 			exit;
 		}
@@ -244,6 +330,9 @@ class LFT_Membership_Frontend {
 		exit;
 	}
 
+	/**
+	 * スタンドアロンログイン処理（メール＋パスワード）。会員DBのみ使用し WP ユーザーは使わない。
+	 */
 	private function process_member_login( $redirect_to ) {
 		$log = isset( $_POST['log'] ) ? sanitize_text_field( wp_unslash( $_POST['log'] ) ) : '';
 		$pwd = isset( $_POST['pwd'] ) ? $_POST['pwd'] : '';
@@ -251,28 +340,20 @@ class LFT_Membership_Frontend {
 			$this->render_login_form_page( null, $redirect_to, 'メールとパスワードを入力してください。' );
 			return;
 		}
-		$user = get_user_by( 'email', $log );
-		if ( ! $user ) {
-			$user = get_user_by( 'login', $log );
-		}
-		if ( ! $user ) {
+		$member = LFT_Membership_DB::get_member_by_email( $log );
+		if ( ! $member || empty( $member->password_hash ) ) {
 			$this->render_login_form_page( null, $redirect_to, 'メールアドレスまたはパスワードが正しくありません。' );
 			return;
 		}
-		if ( ! LFT_Membership_DB::is_user_active_member( $user->ID ) ) {
+		if ( ! wp_check_password( $pwd, $member->password_hash, false ) ) {
+			$this->render_login_form_page( null, $redirect_to, 'メールアドレスまたはパスワードが正しくありません。' );
+			return;
+		}
+		if ( ! LFT_Membership_DB::is_member_active( $member ) ) {
 			$this->render_login_form_page( null, $redirect_to, 'このアカウントではアクセスできません。管理者にお問い合わせください。' );
 			return;
 		}
-		$result = wp_signon( array(
-			'user_login'    => $user->user_login,
-			'user_password' => $pwd,
-			'remember'      => true,
-		), is_ssl() );
-		if ( is_wp_error( $result ) ) {
-			$this->render_login_form_page( null, $redirect_to, 'メールアドレスまたはパスワードが正しくありません。' );
-			return;
-		}
-		// ログイン成功時は会員専用ページ（redirect_to）へ（同一サイト内のみ許可）
+		$this->set_member_cookie( $member->id );
 		$redirect_to = wp_validate_redirect( $redirect_to, home_url( '/' ) );
 		wp_safe_redirect( $redirect_to );
 		exit;
@@ -341,7 +422,11 @@ class LFT_Membership_Frontend {
 			return;
 		}
 
-		// 既登録者：再発行トークンURLではパスワード変更フォームのみ表示（メールは表示のみ・新パスワード・確認のみ）
+		// 既登録者：パスワード設定済み（password_hash あり）または旧 WP ユーザー紐づけの場合はログイン/パスワード変更フォームへ
+		if ( ! empty( $member->password_hash ) ) {
+			$this->render_login_form_page( $member, home_url( '/' ), '' );
+			exit;
+		}
 		if ( ! empty( $member->wp_user_id ) && get_user_by( 'id', $member->wp_user_id ) ) {
 			$this->render_password_reset_only_form( $member, '' );
 			exit;
@@ -383,8 +468,9 @@ class LFT_Membership_Frontend {
 			$this->render_error( 'このリンクではご利用できません。管理者にお問い合わせください。' );
 			exit;
 		}
-		// 未登録者（wp_user_id なし）は new_user へリダイレクトして初回登録を表示
-		if ( empty( $member->wp_user_id ) || ! get_user_by( 'id', $member->wp_user_id ) ) {
+		// 未登録者（password_hash も wp_user_id もない）は new_user へリダイレクト
+		$has_credentials = ! empty( $member->password_hash ) || ( ! empty( $member->wp_user_id ) && get_user_by( 'id', $member->wp_user_id ) );
+		if ( ! $has_credentials ) {
 			$new_user_url = home_url( '/' . $this->slug . '/new_user/' . $token . '/' );
 			wp_safe_redirect( $new_user_url );
 			exit;
@@ -413,10 +499,10 @@ class LFT_Membership_Frontend {
 	}
 
 	/**
-	 * トークンURL上のパスワード再設定処理（new_user/TOKEN で既登録者が新しいパスワードを設定）
+	 * トークンURL上のパスワード再設定処理（会員DBの password_hash を更新）
 	 */
 	private function process_password_reset( $member ) {
-		if ( ! $member || empty( $member->wp_user_id ) ) {
+		if ( ! $member ) {
 			$this->render_error( '無効なリクエストです。' );
 			return;
 		}
@@ -430,10 +516,15 @@ class LFT_Membership_Frontend {
 			$this->render_password_reset_only_form( $member, 'パスワードと確認が一致しません。' );
 			exit;
 		}
-		wp_set_password( $new_password, $member->wp_user_id );
-		// 再設定後もトークンは更新して再利用不可に
+		$password_hash = wp_hash_password( $new_password );
 		$new_token = LFT_Membership_DB::generate_token();
-		LFT_Membership_DB::update_member( $member->id, array( 'token' => $new_token ) );
+		LFT_Membership_DB::update_member( $member->id, array( 'password_hash' => $password_hash, 'token' => $new_token ) );
+		// 旧 WP ユーザー紐づけがある場合もパスワードを同期（後方互換）
+		if ( ! empty( $member->wp_user_id ) && get_user_by( 'id', $member->wp_user_id ) ) {
+			wp_set_password( $new_password, $member->wp_user_id );
+		}
+		// トークンURL（管理者発行）でパスワード変更した旨をメールで通知
+		$this->send_password_changed_email( $member->email, $member->user_name );
 		wp_safe_redirect( home_url( '/' . $this->slug . '/login/' ) );
 		exit;
 	}
@@ -516,53 +607,35 @@ class LFT_Membership_Frontend {
 		$phone        = isset( $_POST['phone'] ) ? sanitize_text_field( wp_unslash( $_POST['phone'] ) ) : $member->phone;
 		LFT_Membership_DB::update_member( $member->id, array( 'user_name' => $user_name, 'company_name' => $company_name, 'phone' => $phone ) );
 
-		// 既存の WP ユーザーがいる場合はパスワードのみ更新し、トークンも更新してログインページへ
-		$user = get_user_by( 'email', $email );
-		if ( $user ) {
-			wp_set_password( $password, $user->ID );
-			LFT_Membership_DB::update_member( $member->id, array( 'wp_user_id' => $user->ID, 'status' => 'active' ) );
-			$new_token = LFT_Membership_DB::generate_token();
-			LFT_Membership_DB::update_member( $member->id, array( 'token' => $new_token ) );
-			wp_safe_redirect( home_url( '/' . $this->slug . '/login/' ) );
-			exit;
-		}
+		// テーブルに password_hash カラムが存在することを保証してから保存
+		LFT_Membership_DB::create_tables();
 
-		// 新規 WP ユーザー作成（ログイン名はメールの@前＋会員IDで一意に）
-		$login = sanitize_user( preg_replace( '/@.+$/', '', $email ) . '_' . $member->id, true );
-		if ( username_exists( $login ) ) {
-			$login = $login . '_' . wp_rand( 100, 999 );
-		}
+		// プラグイン専用DBのみ使用：WP ユーザーは作成せず、会員テーブルにパスワードハッシュを保存
+		$password_hash = wp_hash_password( $password );
+		$new_token = LFT_Membership_DB::generate_token();
+		$updated = LFT_Membership_DB::update_member( $member->id, array(
+			'password_hash' => $password_hash,
+			'status'        => 'active',
+			'token'         => $new_token,
+		) );
 
-		$user_id = wp_create_user( $login, $password, $email );
-		if ( is_wp_error( $user_id ) ) {
-			$member->form_errors = array( $user_id->get_error_message() );
+		if ( ! $updated ) {
+			$member->form_errors = array( '登録の保存に失敗しました。しばらくしてから再度お試しください。解決しない場合は管理者にお問い合わせください。' );
 			$this->render_register_form( $member );
 			return;
 		}
 
-		$user = get_user_by( 'id', $user_id );
-		if ( $user ) {
-			$display_name = ! empty( $user_name ) ? $user_name : $member->user_name;
-			wp_update_user( array(
-				'ID'           => $user_id,
-				'display_name' => $display_name,
-				'nickname'     => $display_name,
-			) );
-		}
+		// 登録完了メールを送信
+		$this->send_registration_confirmation_email( $member->email, $user_name );
 
-		LFT_Membership_DB::update_member( $member->id, array( 'wp_user_id' => $user_id, 'status' => 'active' ) );
-
-		// 登録後はトークンを更新し、同じURLの再利用を防ぐ（パスワード忘れ時は管理者が新しいURLを発行可能）
-		$new_token = LFT_Membership_DB::generate_token();
-		LFT_Membership_DB::update_member( $member->id, array( 'token' => $new_token ) );
-
-		// 登録完了後はプラグインのログインページへ（メール・パスワードでログインしてもらう）
-		wp_safe_redirect( home_url( '/' . $this->slug . '/login/' ) );
+		// 会員Cookieをセットしてログイン状態にし、会員専用ページへリダイレクト可能に
+		$this->set_member_cookie( $member->id );
+		wp_safe_redirect( home_url( '/' ) );
 		exit;
 	}
 
 	/**
-	 * ログイン処理（トークンで会員を特定し、メールは表示せずパスワードのみでログイン）
+	 * ログイン処理（トークンURL上：会員DBの password_hash で認証し Cookie をセット）
 	 */
 	private function process_login( $member, $token ) {
 		if ( ! $member || $member->token !== $token ) {
@@ -575,22 +648,23 @@ class LFT_Membership_Frontend {
 			$this->render_login_form_page( $member, home_url( '/' ), '' );
 			exit;
 		}
-		$user = get_user_by( 'email', $member->email );
-		if ( ! $user ) {
-			$member->login_error = 'ユーザーが見つかりません。';
+		if ( empty( $member->password_hash ) ) {
+			$member->login_error = 'まだ登録が完了していません。下のフォームで会員登録を完了してください。';
+			$this->render_register_form( $member );
+			exit;
+		}
+		// 締め切り・ステータスチェック（期限切れ・一時停止はログイン不可）
+		if ( ! LFT_Membership_DB::is_member_active( $member ) ) {
+			$member->login_error = 'このアカウントではアクセスできません。管理者にお問い合わせください。';
 			$this->render_login_form_page( $member, home_url( '/' ), '' );
 			exit;
 		}
-		$result = wp_signon( array(
-			'user_login'    => $user->user_login,
-			'user_password' => $password,
-			'remember'     => true,
-		), is_ssl() );
-		if ( is_wp_error( $result ) ) {
+		if ( ! wp_check_password( $password, $member->password_hash, false ) ) {
 			$member->login_error = 'メールアドレスまたはパスワードが正しくありません。';
 			$this->render_login_form_page( $member, home_url( '/' ), '' );
 			exit;
 		}
+		$this->set_member_cookie( $member->id );
 		$redirect_to = isset( $_POST['redirect_to'] ) ? esc_url_raw( wp_unslash( $_POST['redirect_to'] ) ) : home_url( '/' );
 		$redirect_to = wp_validate_redirect( $redirect_to, home_url( '/' ) );
 		if ( ! $redirect_to ) {
@@ -627,7 +701,7 @@ class LFT_Membership_Frontend {
 					$body      = $this->get_password_reset_email_body( $reset_url );
 					$sent      = wp_mail( $email, $subject, $body, array( 'Content-Type: text/plain; charset=UTF-8' ) );
 					if ( $sent ) {
-						$message = 'ご登録のメールアドレスに新しいアクセスURLを送信しました。';
+						$message = 'ご登録のメールアドレスにパスワード再設定メールを送信しました。';
 					} else {
 						$error = '送信に失敗しました。しばらくしてから再度お試しください。';
 					}
@@ -667,8 +741,7 @@ MAIL;
 	}
 
 	/**
-	 * /lft_membership/edit/ 会員情報編集（ログイン必須・パスワード確認）
-	 * リライトが未反映の場合は REQUEST_URI で編集ページかどうか判定する
+	 * /lft_membership/edit/ 会員情報編集（会員Cookie でログイン必須・パスワード確認）
 	 */
 	public function handle_edit_page() {
 		$is_edit = ( get_query_var( 'lft_membership' ) === 'edit' );
@@ -681,10 +754,8 @@ MAIL;
 		if ( ! $is_edit ) {
 			return;
 		}
-		$user_id = get_current_user_id();
-		$member  = $user_id ? LFT_Membership_DB::get_member_by_wp_user_id( $user_id ) : null;
-		// ログイン済みで会員レコードがある場合のみ編集ページを表示（active でなくても編集画面へ）
-		if ( ! $user_id || ! $member ) {
+		$member = $this->get_current_lft_member();
+		if ( ! $member ) {
 			$edit_url  = home_url( '/' . $this->slug . '/edit/' );
 			$login_url = home_url( '/' . $this->slug . '/login/' );
 			wp_safe_redirect( add_query_arg( 'redirect_to', $this->redirect_to_path( $edit_url ), $login_url ) );
@@ -696,24 +767,107 @@ MAIL;
 			$current_password = isset( $_POST['current_password'] ) ? $_POST['current_password'] : '';
 			if ( empty( $current_password ) ) {
 				$error = '現在のパスワードを入力してください。';
+			} elseif ( empty( $member->password_hash ) || ! wp_check_password( $current_password, $member->password_hash, false ) ) {
+				$error = '現在のパスワードが正しくありません。';
 			} else {
-				$user = get_user_by( 'id', $user_id );
-				if ( ! $user || ! wp_check_password( $current_password, $user->user_pass, $user->ID ) ) {
-					$error = '現在のパスワードが正しくありません。';
-				} else {
-					$user_name    = isset( $_POST['user_name'] ) ? sanitize_text_field( wp_unslash( $_POST['user_name'] ) ) : $member->user_name;
-					$company_name = isset( $_POST['company_name'] ) ? sanitize_text_field( wp_unslash( $_POST['company_name'] ) ) : $member->company_name;
-					$phone        = isset( $_POST['phone'] ) ? sanitize_text_field( wp_unslash( $_POST['phone'] ) ) : $member->phone;
-					LFT_Membership_DB::update_member( $member->id, array( 'user_name' => $user_name, 'company_name' => $company_name, 'phone' => $phone ) );
-					if ( $user ) {
-						wp_update_user( array( 'ID' => $user->ID, 'display_name' => $user_name, 'nickname' => $user_name ) );
-					}
-					$message = '会員情報を更新しました。';
-				}
+				$user_name    = isset( $_POST['user_name'] ) ? sanitize_text_field( wp_unslash( $_POST['user_name'] ) ) : $member->user_name;
+				$company_name = isset( $_POST['company_name'] ) ? sanitize_text_field( wp_unslash( $_POST['company_name'] ) ) : $member->company_name;
+				$phone        = isset( $_POST['phone'] ) ? sanitize_text_field( wp_unslash( $_POST['phone'] ) ) : $member->phone;
+				LFT_Membership_DB::update_member( $member->id, array( 'user_name' => $user_name, 'company_name' => $company_name, 'phone' => $phone ) );
+				$message = '会員情報を更新しました。';
 			}
 		}
 		wp_enqueue_style( 'lft-membership-register', LFT_MEMBERSHIP_PLUGIN_URL . 'frontend/css/register.css', array(), LFT_MEMBERSHIP_VERSION );
 		include LFT_MEMBERSHIP_PLUGIN_DIR . 'frontend/views/edit-form.php';
 		exit;
+	}
+
+	/**
+	 * /lft_membership/logout/ ログアウト（会員Cookie を削除）
+	 */
+	public function handle_logout() {
+		if ( get_query_var( 'lft_membership' ) !== 'logout' ) {
+			return;
+		}
+		$this->clear_member_cookie();
+		wp_safe_redirect( home_url( '/' . $this->slug . '/login/' ) );
+		exit;
+	}
+
+	/**
+	 * 登録完了メールを送信（トークンURLで会員登録が成功したとき）
+	 *
+	 * @param string $email 送信先メール
+	 * @param string $user_name 会員名
+	 */
+	private function send_registration_confirmation_email( $email, $user_name ) {
+		$site_name = get_bloginfo( 'name' );
+		$login_url = home_url( '/' . $this->slug . '/login/' );
+		$subject  = '[' . $site_name . '] 会員登録が完了しました';
+		$body     = $this->get_registration_confirmation_email_body( $user_name, $login_url );
+		wp_mail( $email, $subject, $body, array( 'Content-Type: text/plain; charset=UTF-8' ) );
+	}
+
+	/**
+	 * 登録完了メール本文
+	 *
+	 * @param string $user_name
+	 * @param string $login_url
+	 * @return string
+	 */
+	private function get_registration_confirmation_email_body( $user_name, $login_url ) {
+		$site_name = get_bloginfo( 'name' );
+		return <<<MAIL
+{$user_name} 様
+
+{$site_name} の会員登録が完了しました。
+
+以下のURLからログインして、会員専用ページをご利用ください。
+
+{$login_url}
+
+---
+{$site_name}
+MAIL;
+	}
+
+	/**
+	 * パスワード変更完了メールを送信（管理者発行のトークンURLでパスワードを変更したとき）
+	 *
+	 * @param string $email    送信先メール
+	 * @param string $user_name 会員名
+	 */
+	private function send_password_changed_email( $email, $user_name ) {
+		if ( empty( $email ) || ! is_email( $email ) ) {
+			return;
+		}
+		$site_name = get_bloginfo( 'name' );
+		$login_url = home_url( '/' . $this->slug . '/login/' );
+		$subject   = '[' . $site_name . '] パスワードを変更しました';
+		$body      = $this->get_password_changed_email_body( $user_name, $login_url );
+		wp_mail( $email, $subject, $body, array( 'Content-Type: text/plain; charset=UTF-8' ) );
+	}
+
+	/**
+	 * パスワード変更完了メール本文
+	 *
+	 * @param string $user_name
+	 * @param string $login_url
+	 * @return string
+	 */
+	private function get_password_changed_email_body( $user_name, $login_url ) {
+		$site_name = get_bloginfo( 'name' );
+		return <<<MAIL
+{$user_name} 様
+
+{$site_name} の会員アカウントで、パスワードが変更されました。
+
+心当たりがない場合は、至急管理者までご連絡ください。
+
+ログインページ：{$login_url}
+
+---
+{$site_name}
+MAIL;
 	}
 }

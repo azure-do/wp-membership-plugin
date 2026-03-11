@@ -241,12 +241,12 @@ class LFT_Membership_Admin {
 		$payment_date = isset( $_POST['payment_date'] ) ? sanitize_text_field( wp_unslash( $_POST['payment_date'] ) ) : '';
 		$deadline     = isset( $_POST['deadline'] ) ? sanitize_text_field( wp_unslash( $_POST['deadline'] ) ) : '';
 
-		if ( empty( $email ) || empty( $user_name ) || empty( $company_name ) || empty( $payment_date ) || empty( $deadline ) ) {
+		if ( empty( $email ) || empty( $user_name ) || empty( $company_name ) || empty( $payment_date ) ) {
 			wp_send_json_error( array( 'message' => '必須項目を入力してください。' ) );
 		}
 
 		$payment_date = $this->parse_date( $payment_date );
-		$deadline     = $this->parse_date( $deadline );
+		$deadline     = $this->parse_date( $deadline ); // 空の場合は null（期限なし）
 
 		$id = LFT_Membership_DB::add_member( array(
 			'token'        => $token,
@@ -264,7 +264,74 @@ class LFT_Membership_Admin {
 		}
 
 		$member = LFT_Membership_DB::get_member( $id );
-		wp_send_json_success( array( 'member' => $member, 'message' => 'ユーザーを登録しました。' ) );
+		// 登録用トークンURLをメールで送信
+		$this->send_invitation_email( $member );
+		// レスポンスから password_hash を除外
+		$member = $this->sanitize_member_for_response( $member );
+		wp_send_json_success( array( 'member' => $member, 'message' => 'ユーザーを登録しました。登録用URLをメールで送信しました。' ) );
+	}
+
+	/**
+	 * 管理画面でユーザー追加時に、登録用トークンURLをメール送信
+	 *
+	 * @param object $member 会員レコード
+	 */
+	private function send_invitation_email( $member ) {
+		if ( empty( $member->email ) || ! is_email( $member->email ) ) {
+			return;
+		}
+		$base   = rtrim( home_url( '/' ), '/' );
+		$slug   = LFT_MEMBERSHIP_SLUG;
+		$reg_url = $base . '/' . $slug . '/new_user/' . $member->token . '/';
+		$site_name = get_bloginfo( 'name' );
+		$subject = '[' . $site_name . '] 会員登録のご案内';
+		$body    = $this->get_invitation_email_body( $member->user_name, $reg_url );
+		wp_mail( $member->email, $subject, $body, array( 'Content-Type: text/plain; charset=UTF-8' ) );
+	}
+
+	/**
+	 * 招待メール本文（登録用URL付き）
+	 *
+	 * @param string $user_name
+	 * @param string $registration_url
+	 * @return string
+	 */
+	private function get_invitation_email_body( $user_name, $registration_url ) {
+		$site_name = get_bloginfo( 'name' );
+		$login_url = home_url( '/' . LFT_MEMBERSHIP_SLUG . '/login/' );
+		return <<<MAIL
+{$user_name} 様
+
+{$site_name} の会員登録のご案内です。
+
+下記のURLより会員登録（パスワード設定）を行ってください。
+
+{$registration_url}
+
+※このURLは一度のみご利用いただけます。登録完了後はログインページからログインしてください。
+
+ログインページ：{$login_url}
+
+---
+{$site_name}
+MAIL;
+	}
+
+	/**
+	 * API レスポンス用に会員オブジェクトから password_hash を除去
+	 *
+	 * @param object $member
+	 * @return object
+	 */
+	private function sanitize_member_for_response( $member ) {
+		if ( ! $member || ! is_object( $member ) ) {
+			return $member;
+		}
+		$copy = clone $member;
+		if ( isset( $copy->password_hash ) ) {
+			unset( $copy->password_hash );
+		}
+		return $copy;
 	}
 
 	public function ajax_update_member() {
@@ -307,7 +374,7 @@ class LFT_Membership_Admin {
 		}
 
 		$member = LFT_Membership_DB::get_member( $id );
-		wp_send_json_success( array( 'member' => $member, 'message' => '更新しました。' ) );
+		wp_send_json_success( array( 'member' => $this->sanitize_member_for_response( $member ), 'message' => '更新しました。' ) );
 	}
 
 	public function ajax_delete_member() {
@@ -348,7 +415,7 @@ class LFT_Membership_Admin {
 			wp_send_json_error( array( 'message' => 'ユーザーが見つかりません。' ) );
 		}
 
-		wp_send_json_success( array( 'member' => $member ) );
+		wp_send_json_success( array( 'member' => $this->sanitize_member_for_response( $member ) ) );
 	}
 
 	public function ajax_toggle_status() {
@@ -374,7 +441,7 @@ class LFT_Membership_Admin {
 		}
 
 		$member = LFT_Membership_DB::get_member( $id );
-		wp_send_json_success( array( 'member' => $member, 'message' => $new_status === 'suspended' ? '一時停止しました。' : '再開しました。' ) );
+		wp_send_json_success( array( 'member' => $this->sanitize_member_for_response( $member ), 'message' => $new_status === 'suspended' ? '一時停止しました。' : '再開しました。' ) );
 	}
 
 	/**

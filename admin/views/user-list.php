@@ -77,7 +77,7 @@ $current_page = isset( $_GET['page'] ) ? sanitize_text_field( wp_unslash( $_GET[
 								$status_label = '日付完了';
 								$status_class = 'lft-status-expired';
 							}
-							$path_seg   = ( isset( $m->wp_user_id ) && (int) $m->wp_user_id > 0 ) ? 'confirmed_user' : 'new_user';
+							$path_seg   = ( ! empty( $m->password_hash ) || ( isset( $m->wp_user_id ) && (int) $m->wp_user_id > 0 ) ) ? 'confirmed_user' : 'new_user';
 							$reg_url    = $base_path . $path_seg . '/' . $m->token;
 							$created_at = $m->created_at ? date_i18n( 'Y.m.d', strtotime( $m->created_at ) ) : '—';
 							$payment_d  = $m->payment_date ? date_i18n( 'Y.m.d', strtotime( $m->payment_date ) ) : '—';
@@ -198,8 +198,8 @@ $current_page = isset( $_GET['page'] ) ? sanitize_text_field( wp_unslash( $_GET[
 						<input type="date" id="lft-field-payment" name="payment_date" required />
 					</p>
 					<p class="lft-form-field">
-						<label for="lft-field-deadline">締め切り <span class="required">*</span></label>
-						<input type="date" id="lft-field-deadline" name="deadline" required />
+						<label for="lft-field-deadline">締め切り</label>
+						<input type="date" id="lft-field-deadline" name="deadline" />
 					</p>
 				</div>
 				<div class="lft-form-row lft-form-row--token" id="lft-form-row-token">

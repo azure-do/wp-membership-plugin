@@ -4,7 +4,7 @@
  */
 
 .lft-membership-wrap {
-	margin: 0 -20px 0 -22px;
+	margin: 0 0 0 -22px;
 }
 
 .lft-membership-admin {
@@ -65,7 +65,6 @@
 	flex: 1;
 	padding: 24px 32px 32px;
 	background: #fff;
-	margin: 20px 20px 20px 0;
 	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 	border-radius: 4px;
 }

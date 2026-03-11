@@ -72,6 +72,7 @@ $login_url    = home_url( '/' . LFT_MEMBERSHIP_SLUG . '/login/' );
 
 			<p class="lft-login-links">
 				<a href="<?php echo esc_url( home_url( '/' ) ); ?>">トップへ戻る</a>
+				| <a href="<?php echo esc_url( home_url( '/' . LFT_MEMBERSHIP_SLUG . '/logout/' ) ); ?>">ログアウト</a>
 			</p>
 		</div>
 	</div>

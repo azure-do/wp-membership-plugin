@@ -31,6 +31,7 @@ class LFT_Membership_DB {
 			deadline date DEFAULT NULL,
 			status varchar(20) NOT NULL DEFAULT 'pending',
 			wp_user_id bigint(20) unsigned DEFAULT NULL,
+			password_hash varchar(255) DEFAULT NULL,
 			created_at datetime DEFAULT CURRENT_TIMESTAMP,
 			updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 			PRIMARY KEY (id),
@@ -41,6 +42,26 @@ class LFT_Membership_DB {
 
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 		dbDelta( $sql );
+
+		// 既存テーブルに password_hash カラムが無い場合は追加（マイグレーション）
+		self::maybe_add_password_hash_column();
+	}
+
+	/**
+	 * 既存の会員テーブルに password_hash カラムが無ければ追加する
+	 */
+	public static function maybe_add_password_hash_column() {
+		global $wpdb;
+		$table = $wpdb->prefix . self::TABLE_MEMBERS;
+		$column = $wpdb->get_results( $wpdb->prepare( "SHOW COLUMNS FROM `{$table}` LIKE %s", 'password_hash' ) );
+		if ( ! empty( $column ) ) {
+			return;
+		}
+		// AFTER 付きで追加を試行し、失敗時は AFTER なしで再試行
+		$added = $wpdb->query( "ALTER TABLE `{$table}` ADD COLUMN password_hash varchar(255) DEFAULT NULL AFTER wp_user_id" );
+		if ( false === $added && $wpdb->last_error ) {
+			$wpdb->query( "ALTER TABLE `{$table}` ADD COLUMN password_hash varchar(255) DEFAULT NULL" );
+		}
 	}
 
 	/**
@@ -97,7 +118,7 @@ class LFT_Membership_DB {
 		global $wpdb;
 		$table = self::get_table_name();
 
-		$allowed = array( 'token', 'user_name', 'email', 'company_name', 'phone', 'payment_date', 'deadline', 'status', 'wp_user_id' );
+		$allowed = array( 'token', 'user_name', 'email', 'company_name', 'phone', 'payment_date', 'deadline', 'status', 'wp_user_id', 'password_hash' );
 		$row = array_intersect_key( $data, array_flip( $allowed ) );
 		if ( empty( $row ) ) {
 			return false;
@@ -178,7 +199,7 @@ class LFT_Membership_DB {
 	}
 
 	/**
-	 * 指定WPユーザーが有効な会員か（アクセス許可）かどうか
+	 * 指定WPユーザーが有効な会員か（アクセス許可）かどうか（後方互換・管理画面用）
 	 *
 	 * @param int $user_id WP user ID
 	 * @return bool
@@ -188,10 +209,24 @@ class LFT_Membership_DB {
 		if ( ! $member ) {
 			return false;
 		}
+		return self::is_member_active( $member );
+	}
+
+	/**
+	 * 会員オブジェクトが有効か（アクセス許可）かどうか
+	 * 締め切り未設定（null）の場合は期限なしで有効
+	 *
+	 * @param object $member 会員レコード
+	 * @return bool
+	 */
+	public static function is_member_active( $member ) {
+		if ( ! $member ) {
+			return false;
+		}
 		if ( $member->status === 'suspended' || $member->status === 'expired' ) {
 			return false;
 		}
-		if ( $member->deadline && strtotime( $member->deadline ) < strtotime( 'today' ) ) {
+		if ( ! empty( $member->deadline ) && strtotime( $member->deadline ) < strtotime( 'today' ) ) {
 			return false;
 		}
 		return true;
