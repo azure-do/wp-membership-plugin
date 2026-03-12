@@ -1,13 +1,15 @@
 <?php
+
 /**
  * 会員テーブルの作成とCRUD
  *
  * @package LFT_Membership
  */
 
-defined( 'ABSPATH' ) || exit;
+defined('ABSPATH') || exit;
 
-class LFT_Membership_DB {
+class LFT_Membership_DB
+{
 
 	/** 会員テーブル名（プレフィックス付き） */
 	const TABLE_MEMBERS = 'lft_members';
@@ -15,7 +17,8 @@ class LFT_Membership_DB {
 	/**
 	 * 会員テーブルを作成
 	 */
-	public static function create_tables() {
+	public static function create_tables()
+	{
 		global $wpdb;
 		$table = $wpdb->prefix . self::TABLE_MEMBERS;
 		$charset = $wpdb->get_charset_collate();
@@ -41,7 +44,7 @@ class LFT_Membership_DB {
 		) {$charset};";
 
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
-		dbDelta( $sql );
+		dbDelta($sql);
 
 		// 既存テーブルに password_hash カラムが無い場合は追加（マイグレーション）
 		self::maybe_add_password_hash_column();
@@ -50,17 +53,18 @@ class LFT_Membership_DB {
 	/**
 	 * 既存の会員テーブルに password_hash カラムが無ければ追加する
 	 */
-	public static function maybe_add_password_hash_column() {
+	public static function maybe_add_password_hash_column()
+	{
 		global $wpdb;
 		$table = $wpdb->prefix . self::TABLE_MEMBERS;
-		$column = $wpdb->get_results( $wpdb->prepare( "SHOW COLUMNS FROM `{$table}` LIKE %s", 'password_hash' ) );
-		if ( ! empty( $column ) ) {
+		$column = $wpdb->get_results($wpdb->prepare("SHOW COLUMNS FROM `{$table}` LIKE %s", 'password_hash'));
+		if (! empty($column)) {
 			return;
 		}
 		// AFTER 付きで追加を試行し、失敗時は AFTER なしで再試行
-		$added = $wpdb->query( "ALTER TABLE `{$table}` ADD COLUMN password_hash varchar(255) DEFAULT NULL AFTER wp_user_id" );
-		if ( false === $added && $wpdb->last_error ) {
-			$wpdb->query( "ALTER TABLE `{$table}` ADD COLUMN password_hash varchar(255) DEFAULT NULL" );
+		$added = $wpdb->query("ALTER TABLE `{$table}` ADD COLUMN password_hash varchar(255) DEFAULT NULL AFTER wp_user_id");
+		if (false === $added && $wpdb->last_error) {
+			$wpdb->query("ALTER TABLE `{$table}` ADD COLUMN password_hash varchar(255) DEFAULT NULL");
 		}
 	}
 
@@ -69,7 +73,8 @@ class LFT_Membership_DB {
 	 *
 	 * @return string
 	 */
-	public static function get_table_name() {
+	public static function get_table_name()
+	{
 		global $wpdb;
 		return $wpdb->prefix . self::TABLE_MEMBERS;
 	}
@@ -80,7 +85,8 @@ class LFT_Membership_DB {
 	 * @param array $data メール、ユーザー名、会社名、電話番号、支払日、締め切り、token
 	 * @return int|false 挿入ID または false
 	 */
-	public static function add_member( $data ) {
+	public static function add_member($data)
+	{
 		global $wpdb;
 		$table = self::get_table_name();
 
@@ -96,14 +102,14 @@ class LFT_Membership_DB {
 			'wp_user_id'    => null,
 		);
 
-		$row = wp_parse_args( $data, $defaults );
-		$row = array_intersect_key( $row, $defaults );
+		$row = wp_parse_args($data, $defaults);
+		$row = array_intersect_key($row, $defaults);
 
-		if ( empty( $row['token'] ) ) {
+		if (empty($row['token'])) {
 			return false;
 		}
 
-		$wpdb->insert( $table, $row, array( '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d' ) );
+		$wpdb->insert($table, $row, array('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d'));
 		return $wpdb->insert_id ? (int) $wpdb->insert_id : false;
 	}
 
@@ -114,22 +120,23 @@ class LFT_Membership_DB {
 	 * @param array $data 更新するカラム
 	 * @return bool
 	 */
-	public static function update_member( $id, $data ) {
+	public static function update_member($id, $data)
+	{
 		global $wpdb;
 		$table = self::get_table_name();
 
-		$allowed = array( 'token', 'user_name', 'email', 'company_name', 'phone', 'payment_date', 'deadline', 'status', 'wp_user_id', 'password_hash' );
-		$row = array_intersect_key( $data, array_flip( $allowed ) );
-		if ( empty( $row ) ) {
+		$allowed = array('token', 'user_name', 'email', 'company_name', 'phone', 'payment_date', 'deadline', 'status', 'wp_user_id', 'password_hash');
+		$row = array_intersect_key($data, array_flip($allowed));
+		if (empty($row)) {
 			return false;
 		}
 
 		$formats = array();
-		foreach ( array_keys( $row ) as $k ) {
-			$formats[] = ( $k === 'wp_user_id' ) ? '%d' : '%s';
+		foreach (array_keys($row) as $k) {
+			$formats[] = ($k === 'wp_user_id') ? '%d' : '%s';
 		}
 
-		return false !== $wpdb->update( $table, $row, array( 'id' => $id ), $formats, array( '%d' ) );
+		return false !== $wpdb->update($table, $row, array('id' => $id), $formats, array('%d'));
 	}
 
 	/**
@@ -138,10 +145,11 @@ class LFT_Membership_DB {
 	 * @param int $id 会員ID
 	 * @return bool
 	 */
-	public static function delete_member( $id ) {
+	public static function delete_member($id)
+	{
 		global $wpdb;
 		$table = self::get_table_name();
-		return false !== $wpdb->delete( $table, array( 'id' => $id ), array( '%d' ) );
+		return false !== $wpdb->delete($table, array('id' => $id), array('%d'));
 	}
 
 	/**
@@ -150,10 +158,11 @@ class LFT_Membership_DB {
 	 * @param int $id 会員ID
 	 * @return object|null
 	 */
-	public static function get_member( $id ) {
+	public static function get_member($id)
+	{
 		global $wpdb;
 		$table = self::get_table_name();
-		return $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$table} WHERE id = %d", $id ) );
+		return $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE id = %d", $id));
 	}
 
 	/**
@@ -162,10 +171,11 @@ class LFT_Membership_DB {
 	 * @param string $token
 	 * @return object|null
 	 */
-	public static function get_member_by_token( $token ) {
+	public static function get_member_by_token($token)
+	{
 		global $wpdb;
 		$table = self::get_table_name();
-		return $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$table} WHERE token = %s", $token ) );
+		return $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE token = %s", $token));
 	}
 
 	/**
@@ -174,13 +184,14 @@ class LFT_Membership_DB {
 	 * @param string $email
 	 * @return object|null
 	 */
-	public static function get_member_by_email( $email ) {
-		if ( empty( $email ) || ! is_email( $email ) ) {
+	public static function get_member_by_email($email)
+	{
+		if (empty($email) || ! is_email($email)) {
 			return null;
 		}
 		global $wpdb;
 		$table = self::get_table_name();
-		return $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$table} WHERE email = %s", $email ) );
+		return $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE email = %s", $email));
 	}
 
 	/**
@@ -189,13 +200,14 @@ class LFT_Membership_DB {
 	 * @param int $wp_user_id
 	 * @return object|null
 	 */
-	public static function get_member_by_wp_user_id( $wp_user_id ) {
-		if ( ! $wp_user_id ) {
+	public static function get_member_by_wp_user_id($wp_user_id)
+	{
+		if (! $wp_user_id) {
 			return null;
 		}
 		global $wpdb;
 		$table = self::get_table_name();
-		return $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$table} WHERE wp_user_id = %d", $wp_user_id ) );
+		return $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE wp_user_id = %d", $wp_user_id));
 	}
 
 	/**
@@ -204,12 +216,13 @@ class LFT_Membership_DB {
 	 * @param int $user_id WP user ID
 	 * @return bool
 	 */
-	public static function is_user_active_member( $user_id ) {
-		$member = self::get_member_by_wp_user_id( $user_id );
-		if ( ! $member ) {
+	public static function is_user_active_member($user_id)
+	{
+		$member = self::get_member_by_wp_user_id($user_id);
+		if (! $member) {
 			return false;
 		}
-		return self::is_member_active( $member );
+		return self::is_member_active($member);
 	}
 
 	/**
@@ -219,14 +232,15 @@ class LFT_Membership_DB {
 	 * @param object $member 会員レコード
 	 * @return bool
 	 */
-	public static function is_member_active( $member ) {
-		if ( ! $member ) {
+	public static function is_member_active($member)
+	{
+		if (! $member) {
 			return false;
 		}
-		if ( $member->status === 'suspended' || $member->status === 'expired' ) {
+		if ($member->status === 'suspended' || $member->status === 'expired') {
 			return false;
 		}
-		if ( ! empty( $member->deadline ) && strtotime( $member->deadline ) < strtotime( 'today' ) ) {
+		if (! empty($member->deadline) && strtotime($member->deadline) < strtotime('today')) {
 			return false;
 		}
 		return true;
@@ -238,7 +252,8 @@ class LFT_Membership_DB {
 	 * @param array $args 検索キーワード、ページ、1ページあたり件数
 	 * @return array { total, items }
 	 */
-	public static function get_members( $args = array() ) {
+	public static function get_members($args = array())
+	{
 		global $wpdb;
 		$table = self::get_table_name();
 
@@ -247,37 +262,37 @@ class LFT_Membership_DB {
 			'paged'    => 1,
 			'per_page' => 20,
 		);
-		$args = wp_parse_args( $args, $defaults );
+		$args = wp_parse_args($args, $defaults);
 
 		$where = '1=1';
 		$values = array();
 
-		if ( ! empty( $args['search'] ) ) {
-			$like = '%' . $wpdb->esc_like( $args['search'] ) . '%';
+		if (! empty($args['search'])) {
+			$like = '%' . $wpdb->esc_like($args['search']) . '%';
 			$where .= " AND ( user_name LIKE %s OR email LIKE %s OR company_name LIKE %s OR token LIKE %s )";
-			$values = array_merge( $values, array( $like, $like, $like, $like ) );
+			$values = array_merge($values, array($like, $like, $like, $like));
 		}
 
-		if ( ! empty( $values ) ) {
-			$total = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$table} WHERE {$where}", $values ) );
+		if (! empty($values)) {
+			$total = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$table} WHERE {$where}", $values));
 		} else {
-			$total = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$table} WHERE {$where}" );
+			$total = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$table} WHERE {$where}");
 		}
 
-		$per_page = max( 1, (int) $args['per_page'] );
-		$offset   = ( (int) $args['paged'] - 1 ) * $per_page;
+		$per_page = max(1, (int) $args['per_page']);
+		$offset   = ((int) $args['paged'] - 1) * $per_page;
 
 		$order_sql = "ORDER BY id DESC LIMIT %d OFFSET %d";
 		$values[]  = $per_page;
 		$values[]  = $offset;
 
-		if ( ! empty( $args['search'] ) ) {
-			$query = $wpdb->prepare( "SELECT * FROM {$table} WHERE {$where} {$order_sql}", $values );
+		if (! empty($args['search'])) {
+			$query = $wpdb->prepare("SELECT * FROM {$table} WHERE {$where} {$order_sql}", $values);
 		} else {
-			$query = $wpdb->prepare( "SELECT * FROM {$table} WHERE 1=1 {$order_sql}", $per_page, $offset );
+			$query = $wpdb->prepare("SELECT * FROM {$table} WHERE 1=1 {$order_sql}", $per_page, $offset);
 		}
 
-		$items = $wpdb->get_results( $query );
+		$items = $wpdb->get_results($query);
 
 		return array(
 			'total' => $total,
@@ -290,12 +305,13 @@ class LFT_Membership_DB {
 	 *
 	 * @return string
 	 */
-	public static function generate_token() {
+	public static function generate_token()
+	{
 		$table = self::get_table_name();
 		do {
-			$token = bin2hex( random_bytes( 16 ) );
-			$exists = self::get_member_by_token( $token );
-		} while ( $exists );
+			$token = bin2hex(random_bytes(16));
+			$exists = self::get_member_by_token($token);
+		} while ($exists);
 		return $token;
 	}
 
@@ -305,16 +321,17 @@ class LFT_Membership_DB {
 	 *
 	 * @return int 更新した行数
 	 */
-	public static function expire_overdue_members() {
+	public static function expire_overdue_members()
+	{
 		global $wpdb;
 		$table = self::get_table_name();
-		$today  = current_time( 'Y-m-d' );
+		$today  = current_time('Y-m-d');
 		// 締め切りが今日より前で、かつ suspended/expired 以外の会員を expired に更新
-		$updated = $wpdb->query( $wpdb->prepare(
+		$updated = $wpdb->query($wpdb->prepare(
 			"UPDATE {$table} SET status = 'expired', updated_at = %s WHERE deadline < %s AND status NOT IN ('expired', 'suspended')",
-			current_time( 'mysql' ),
+			current_time('mysql'),
 			$today
-		) );
+		));
 		return false !== $updated ? (int) $updated : 0;
 	}
 }
