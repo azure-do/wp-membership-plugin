@@ -839,14 +839,14 @@ MAIL;
 	}
 
 	/**
-	 * /lft_membership/logout/ ログアウト（会員Cookie を削除）
+	 * /lft_membership/logout/ ログアウト（会員Cookie を削除し、トップへリダイレクト）
 	 */
 	public function handle_logout() {
 		if ( get_query_var( 'lft_membership' ) !== 'logout' ) {
 			return;
 		}
 		$this->clear_member_cookie();
-		wp_safe_redirect( home_url( '/' . $this->slug . '/login/' ) );
+		wp_safe_redirect( home_url( '/' ) );
 		exit;
 	}
 
