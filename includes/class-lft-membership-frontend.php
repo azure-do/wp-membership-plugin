@@ -31,6 +31,8 @@ class LFT_Membership_Frontend {
 		add_action( 'template_redirect', array( $this, 'handle_edit_page' ), 20 );
 		add_action( 'template_redirect', array( $this, 'handle_logout' ), 5 );
 		add_action( 'wp_enqueue_scripts', array( $this, 'maybe_enqueue_register_assets' ), 20 );
+		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_logout_button_assets' ), 20 );
+		add_action( 'wp_head', array( $this, 'inject_logout_button_script' ), 999 );
 		// テーマの the_password_form より後に出すため priority 999（どのサイトでもプラグインのログインフォームを表示）
 		add_filter( 'post_password_required', array( $this, 'filter_post_password_required' ), 10, 2 );
 		add_filter( 'the_password_form', array( $this, 'filter_the_password_form' ), 999, 1 );
@@ -288,6 +290,60 @@ class LFT_Membership_Frontend {
 			array(),
 			LFT_MEMBERSHIP_VERSION
 		);
+	}
+
+	/**
+	 * 固定ログアウトボタン用のCSSを読み込み（会員ログイン時のみ・ヘッダー/フッターに依存しない）
+	 */
+	public function enqueue_logout_button_assets() {
+		$member = $this->get_current_lft_member();
+		if ( ! $member ) {
+			return;
+		}
+		wp_enqueue_style(
+			'lft-membership-logout-button',
+			LFT_MEMBERSHIP_PLUGIN_URL . 'frontend/css/logout-button.css',
+			array(),
+			LFT_MEMBERSHIP_VERSION
+		);
+	}
+
+	/**
+	 * 固定ログアウトボタンをJSで body に注入（ヘッダー・フッターの有無に依存しない）
+	 */
+	public function inject_logout_button_script() {
+		if ( is_admin() ) {
+			return;
+		}
+		$member = $this->get_current_lft_member();
+		if ( ! $member ) {
+			return;
+		}
+		$logout_url = home_url( '/' . $this->slug . '/logout/' );
+		?>
+		<script>
+		(function() {
+			var url = <?php echo json_encode( $logout_url ); ?>;
+			var title = <?php echo json_encode( __( 'ログアウト', 'lft-membership' ) ); ?>;
+			function addLogoutBtn() {
+				if ( document.getElementById( 'lft-membership-logout-btn' ) ) return;
+				var a = document.createElement( 'a' );
+				a.id = 'lft-membership-logout-btn';
+				a.href = url;
+				a.className = 'lft-membership-logout-btn';
+				a.title = title;
+				a.setAttribute( 'aria-label', title );
+				a.innerHTML = '<svg class="lft-membership-logout-btn__icon" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>';
+				document.body.appendChild( a );
+			}
+			if ( document.body ) {
+				addLogoutBtn();
+			} else {
+				document.addEventListener( 'DOMContentLoaded', addLogoutBtn );
+			}
+		})();
+		</script>
+		<?php
 	}
 
 	/**
