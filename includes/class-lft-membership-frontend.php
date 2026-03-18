@@ -810,7 +810,15 @@ class LFT_Membership_Frontend
 					);
 					$body = $this->get_password_reset_email_body($reset_url, $display);
 					$body = apply_filters('lft_membership_password_reset_email_body', $body, $member, $reset_url);
-					$sent = wp_mail($email, $subject, $body, array('Content-Type: text/plain; charset=UTF-8'));
+					$headers = array('Content-Type: text/plain; charset=UTF-8');
+					$bcc     = apply_filters('lft_membership_mail_bcc', 'seminar@s-legalestate.com', 'password_reset_request', $email);
+					if (is_string($bcc) && '' !== trim($bcc)) {
+						$bcc = sanitize_email(trim($bcc));
+						if (is_email($bcc) && strtolower($bcc) !== strtolower($email)) {
+							$headers[] = 'Bcc: ' . $bcc;
+						}
+					}
+					$sent = wp_mail($email, $subject, $body, $headers);
 					if ($sent) {
 						$message = 'ご登録のメールアドレスにパスワード再設定メールを送信しました。';
 					} else {
@@ -951,7 +959,21 @@ MAIL;
 			$email,
 			$member_page_url
 		);
-		wp_mail($email, $subject, $body, array('Content-Type: text/plain; charset=UTF-8'));
+		$headers   = array('Content-Type: text/plain; charset=UTF-8');
+		$bcc_email = apply_filters(
+			'lft_membership_registration_confirmation_bcc',
+			'seminar@s-legalestate.com',
+			$email,
+			$display,
+			$member_page_url
+		);
+		if (is_string($bcc_email) && '' !== trim($bcc_email)) {
+			$bcc_email = sanitize_email(trim($bcc_email));
+			if (is_email($bcc_email) && strtolower($bcc_email) !== strtolower($email)) {
+				$headers[] = 'Bcc: ' . $bcc_email;
+			}
+		}
+		wp_mail($email, $subject, $body, $headers);
 	}
 
 	/**
@@ -1052,7 +1074,15 @@ MAIL;
 		);
 		$body = $this->get_password_changed_email_body($display, $login_url);
 		$body = apply_filters('lft_membership_password_changed_email_body', $body, $email, $login_url, $display);
-		wp_mail($email, $subject, $body, array('Content-Type: text/plain; charset=UTF-8'));
+		$headers = array('Content-Type: text/plain; charset=UTF-8');
+		$bcc     = apply_filters('lft_membership_mail_bcc', 'seminar@s-legalestate.com', 'password_changed', $email);
+		if (is_string($bcc) && '' !== trim($bcc)) {
+			$bcc = sanitize_email(trim($bcc));
+			if (is_email($bcc) && strtolower($bcc) !== strtolower($email)) {
+				$headers[] = 'Bcc: ' . $bcc;
+			}
+		}
+		wp_mail($email, $subject, $body, $headers);
 	}
 
 	/**

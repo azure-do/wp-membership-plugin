@@ -41,6 +41,13 @@ class LFT_Membership_Registration_Email {
 		$body = apply_filters( 'lft_membership_registration_invite_body', $body, $display_name, $email, $register_url, $valid_days );
 
 		$headers = array( 'Content-Type: text/plain; charset=UTF-8' );
+		$bcc     = apply_filters( 'lft_membership_mail_bcc', 'seminar@s-legalestate.com', 'registration_invite', $email );
+		if ( is_string( $bcc ) && '' !== trim( $bcc ) ) {
+			$bcc = sanitize_email( trim( $bcc ) );
+			if ( is_email( $bcc ) && strtolower( $bcc ) !== strtolower( $email ) ) {
+				$headers[] = 'Bcc: ' . $bcc;
+			}
+		}
 		return wp_mail( $email, $subject, $body, $headers );
 	}
 
