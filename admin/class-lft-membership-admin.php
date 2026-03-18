@@ -280,41 +280,10 @@ class LFT_Membership_Admin {
 		if ( empty( $member->email ) || ! is_email( $member->email ) ) {
 			return;
 		}
-		$base   = rtrim( home_url( '/' ), '/' );
-		$slug   = LFT_MEMBERSHIP_SLUG;
+		$base    = rtrim( home_url( '/' ), '/' );
+		$slug    = LFT_MEMBERSHIP_SLUG;
 		$reg_url = $base . '/' . $slug . '/new_user/' . $member->token . '/';
-		$site_name = get_bloginfo( 'name' );
-		$subject = '[' . $site_name . '] 会員登録のご案内';
-		$body    = $this->get_invitation_email_body( $member->user_name, $reg_url );
-		wp_mail( $member->email, $subject, $body, array( 'Content-Type: text/plain; charset=UTF-8' ) );
-	}
-
-	/**
-	 * 招待メール本文（登録用URL付き）
-	 *
-	 * @param string $user_name
-	 * @param string $registration_url
-	 * @return string
-	 */
-	private function get_invitation_email_body( $user_name, $registration_url ) {
-		$site_name = get_bloginfo( 'name' );
-		$login_url = home_url( '/' . LFT_MEMBERSHIP_SLUG . '/login/' );
-		return <<<MAIL
-{$user_name} 様
-
-{$site_name} の会員登録のご案内です。
-
-下記のURLより会員登録（パスワード設定）を行ってください。
-
-{$registration_url}
-
-※このURLは一度のみご利用いただけます。登録完了後はログインページからログインしてください。
-
-ログインページ：{$login_url}
-
----
-{$site_name}
-MAIL;
+		LFT_Membership_Registration_Email::send_invite( $member->user_name, $member->email, $reg_url );
 	}
 
 	/**

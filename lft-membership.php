@@ -4,7 +4,7 @@
  * Plugin Name: LFT Membership
  * Plugin URI: https://s-legalestate.com
  * Description: 会員管理プラグイン。管理者がユーザーを登録し、トークン付きアクセスURLで会員専用ページへのアクセスを管理します。
- * Version: 1.0.4
+ * Version: 1.0.5
  * Author: Legal Estate
  * Text Domain: lft-membership
  * Domain Path: /languages
@@ -13,12 +13,13 @@
 
 defined('ABSPATH') || exit;
 
-define('LFT_MEMBERSHIP_VERSION', '1.0.4');
+define('LFT_MEMBERSHIP_VERSION', '1.0.5');
 define('LFT_MEMBERSHIP_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('LFT_MEMBERSHIP_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('LFT_MEMBERSHIP_SLUG', 'lft_membership');
 
 require_once LFT_MEMBERSHIP_PLUGIN_DIR . 'includes/class-lft-membership-db.php';
+require_once LFT_MEMBERSHIP_PLUGIN_DIR . 'includes/class-lft-membership-registration-email.php';
 require_once LFT_MEMBERSHIP_PLUGIN_DIR . 'includes/class-lft-membership.php';
 require_once LFT_MEMBERSHIP_PLUGIN_DIR . 'includes/class-lft-membership-frontend.php';
 require_once LFT_MEMBERSHIP_PLUGIN_DIR . 'admin/class-lft-membership-admin.php';
