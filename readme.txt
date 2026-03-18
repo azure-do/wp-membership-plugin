@@ -1,6 +1,6 @@
 === LFT Membership ===
 
-Contributors: legalestate
+Contributors: bz3323766@gmail.com
 Plugin Name: LFT Membership
 Description: 会員管理プラグイン。管理者がユーザーを登録し、トークン付きアクセスURLで会員専用ページへのアクセスを管理します。どのサイトにもインストールして利用できます。
 Version: 1.0.0
