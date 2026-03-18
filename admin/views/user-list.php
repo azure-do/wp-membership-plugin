@@ -57,7 +57,7 @@ $current_page = isset( $_GET['page'] ) ? sanitize_text_field( wp_unslash( $_GET[
 							<th class="column-email">メール</th>
 							<th class="column-company">会社名</th>
 							<th class="column-payment">支払日</th>
-							<th class="column-deadline">締め切り</th>
+							<th class="column-deadline">退会日</th>
 							<th class="column-status">現在の状態</th>
 							<th class="column-link">登録リンク</th>
 							<th class="column-reg-date">登録日</th>
@@ -72,7 +72,7 @@ $current_page = isset( $_GET['page'] ) ? sanitize_text_field( wp_unslash( $_GET[
 							$display_id   = 'user' . $m->id;
 							$status_label = isset( $status_labels[ $m->status ] ) ? $status_labels[ $m->status ] : $m->status;
 							$status_class = LFT_Membership_Admin::get_status_class( $m->status );
-							// 締め切り過ぎは DB で expired に更新済み。表示も「日付完了」
+							// 退会日過ぎは DB で expired に更新済み。表示も「日付完了」
 							if ( $m->status === 'expired' || ( $m->status !== 'suspended' && LFT_Membership_Admin::is_expired_by_date( $m->deadline ) ) ) {
 								$status_label = '日付完了';
 								$status_class = 'lft-status-expired';
@@ -198,7 +198,7 @@ $current_page = isset( $_GET['page'] ) ? sanitize_text_field( wp_unslash( $_GET[
 						<input type="date" id="lft-field-payment" name="payment_date" required />
 					</p>
 					<p class="lft-form-field">
-						<label for="lft-field-deadline">締め切り</label>
+						<label for="lft-field-deadline">退会日</label>
 						<input type="date" id="lft-field-deadline" name="deadline" />
 					</p>
 				</div>

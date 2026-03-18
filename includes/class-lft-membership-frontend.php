@@ -103,6 +103,16 @@ class LFT_Membership_Frontend {
 	}
 
 	/**
+	 * ログイン後のデフォルト遷移先（会員専用ページのトップ想定）
+	 *
+	 * @return string
+	 */
+	private function get_default_redirect_url() {
+		// lft_membership 固有の会員トップページ（ユーザー側で作成する想定）
+		return home_url( '/' . $this->slug . '/' );
+	}
+
+	/**
 	 * GET/POST の redirect_to（パスまたはフルURL）をフルURLに復元
 	 *
 	 * @param string $path_or_url
@@ -110,7 +120,7 @@ class LFT_Membership_Frontend {
 	 */
 	private function redirect_from_path( $path_or_url ) {
 		if ( empty( $path_or_url ) ) {
-			return home_url( '/' );
+			return $this->get_default_redirect_url();
 		}
 		$path_or_url = wp_unslash( $path_or_url );
 		if ( strpos( $path_or_url, 'http' ) === 0 ) {
@@ -333,7 +343,11 @@ class LFT_Membership_Frontend {
 				a.className = 'lft-membership-logout-btn';
 				a.title = title;
 				a.setAttribute( 'aria-label', title );
-				a.innerHTML = '<svg class="lft-membership-logout-btn__icon" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>';
+				a.innerHTML =
+					'<span class="lft-membership-logout-btn__icon-wrap">' +
+						'<svg class="lft-membership-logout-btn__icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>' +
+					'</span>' +
+					'<span class="lft-membership-logout-btn__label">' + title + '</span>';
 				document.body.appendChild( a );
 			}
 			if ( document.body ) {
@@ -362,14 +376,14 @@ class LFT_Membership_Frontend {
 			return;
 		}
 		// POST 時は redirect_to をリクエストから取得（パスまたはフルURL）。フルURLに復元して使用。
-		$redirect_to = home_url( '/' );
+		$redirect_to = $this->get_default_redirect_url();
 		if ( isset( $_POST['redirect_to'] ) && is_string( $_POST['redirect_to'] ) ) {
 			$redirect_to = $this->redirect_from_path( $_POST['redirect_to'] );
 		} elseif ( isset( $_GET['redirect_to'] ) && is_string( $_GET['redirect_to'] ) ) {
 			$redirect_to = $this->redirect_from_path( $_GET['redirect_to'] );
 		}
 		if ( ! $redirect_to ) {
-			$redirect_to = home_url( '/' );
+			$redirect_to = $this->get_default_redirect_url();
 		}
 		if ( isset( $_POST['lft_member_login_nonce'] ) && wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['lft_member_login_nonce'] ) ), 'lft_member_login' ) ) {
 			$this->process_member_login( $redirect_to );
@@ -378,7 +392,7 @@ class LFT_Membership_Frontend {
 		// 既に会員Cookieでログイン済みならリダイレクト
 		$member = $this->get_current_lft_member();
 		if ( $member && LFT_Membership_DB::is_member_active( $member ) ) {
-			$redirect_to = wp_validate_redirect( $redirect_to, home_url( '/' ) );
+			$redirect_to = wp_validate_redirect( $redirect_to, $this->get_default_redirect_url() );
 			wp_safe_redirect( $redirect_to );
 			exit;
 		}
@@ -410,7 +424,7 @@ class LFT_Membership_Frontend {
 			return;
 		}
 		$this->set_member_cookie( $member->id );
-		$redirect_to = wp_validate_redirect( $redirect_to, home_url( '/' ) );
+		$redirect_to = wp_validate_redirect( $redirect_to, $this->get_default_redirect_url() );
 		wp_safe_redirect( $redirect_to );
 		exit;
 	}
@@ -431,7 +445,7 @@ class LFT_Membership_Frontend {
 			LFT_MEMBERSHIP_VERSION
 		);
 		if ( ! $redirect_to ) {
-			$redirect_to = home_url( '/' );
+			$redirect_to = $this->get_default_redirect_url();
 		}
 		include LFT_MEMBERSHIP_PLUGIN_DIR . 'frontend/views/login-form.php';
 	}
@@ -460,7 +474,7 @@ class LFT_Membership_Frontend {
 			return;
 		}
 
-		// 締め切り過ぎ・停止中は登録不可
+		// 退会日過ぎ・停止中は登録不可
 		if ( $member->status === 'expired' || $member->status === 'suspended' ) {
 			$this->render_error( 'この登録リンクでは登録できません。管理者にお問い合わせください。' );
 			return;
@@ -684,9 +698,9 @@ class LFT_Membership_Frontend {
 		// 登録完了メールを送信
 		$this->send_registration_confirmation_email( $member->email, $user_name );
 
-		// 会員Cookieをセットしてログイン状態にし、会員専用ページへリダイレクト可能に
+		// 会員Cookieをセットしてログイン状態にし、会員専用ページへリダイレクト
 		$this->set_member_cookie( $member->id );
-		wp_safe_redirect( home_url( '/' ) );
+		wp_safe_redirect( $this->get_default_redirect_url() );
 		exit;
 	}
 
@@ -709,7 +723,7 @@ class LFT_Membership_Frontend {
 			$this->render_register_form( $member );
 			exit;
 		}
-		// 締め切り・ステータスチェック（期限切れ・一時停止はログイン不可）
+		// 退会日・ステータスチェック（期限切れ・一時停止はログイン不可）
 		if ( ! LFT_Membership_DB::is_member_active( $member ) ) {
 			$member->login_error = 'このアカウントではアクセスできません。管理者にお問い合わせください。';
 			$this->render_login_form_page( $member, home_url( '/' ), '' );
@@ -721,10 +735,10 @@ class LFT_Membership_Frontend {
 			exit;
 		}
 		$this->set_member_cookie( $member->id );
-		$redirect_to = isset( $_POST['redirect_to'] ) ? esc_url_raw( wp_unslash( $_POST['redirect_to'] ) ) : home_url( '/' );
-		$redirect_to = wp_validate_redirect( $redirect_to, home_url( '/' ) );
+		$redirect_to = isset( $_POST['redirect_to'] ) ? $this->redirect_from_path( $_POST['redirect_to'] ) : $this->get_default_redirect_url();
+		$redirect_to = wp_validate_redirect( $redirect_to, $this->get_default_redirect_url() );
 		if ( ! $redirect_to ) {
-			$redirect_to = home_url( '/' );
+			$redirect_to = $this->get_default_redirect_url();
 		}
 		wp_safe_redirect( $redirect_to );
 		exit;

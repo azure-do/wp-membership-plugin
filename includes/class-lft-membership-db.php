@@ -82,7 +82,7 @@ class LFT_Membership_DB
 	/**
 	 * 会員を追加
 	 *
-	 * @param array $data メール、ユーザー名、会社名、電話番号、支払日、締め切り、token
+	 * @param array $data メール、ユーザー名、会社名、電話番号、支払日、退会日、token
 	 * @return int|false 挿入ID または false
 	 */
 	public static function add_member($data)
@@ -227,7 +227,7 @@ class LFT_Membership_DB
 
 	/**
 	 * 会員オブジェクトが有効か（アクセス許可）かどうか
-	 * 締め切り未設定（null）の場合は期限なしで有効
+	 * 退会日未設定（null）の場合は期限なしで有効
 	 *
 	 * @param object $member 会員レコード
 	 * @return bool
@@ -316,8 +316,8 @@ class LFT_Membership_DB
 	}
 
 	/**
-	 * 締め切りを過ぎた会員のステータスを「日付完了」に更新
-	 * 今日より前の締め切り日なら status を expired にする
+	 * 退会日を過ぎた会員のステータスを「日付完了」に更新
+	 * 今日より前の退会日日なら status を expired にする
 	 *
 	 * @return int 更新した行数
 	 */
@@ -326,7 +326,7 @@ class LFT_Membership_DB
 		global $wpdb;
 		$table = self::get_table_name();
 		$today  = current_time('Y-m-d');
-		// 締め切りが今日より前で、かつ suspended/expired 以外の会員を expired に更新
+		// 退会日が今日より前で、かつ suspended/expired 以外の会員を expired に更新
 		$updated = $wpdb->query($wpdb->prepare(
 			"UPDATE {$table} SET status = 'expired', updated_at = %s WHERE deadline < %s AND status NOT IN ('expired', 'suspended')",
 			current_time('mysql'),

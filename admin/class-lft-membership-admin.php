@@ -73,10 +73,10 @@ class LFT_Membership_Admin {
 
 	/**
 	 * ユーザー一覧ページ（メニュー「ユーザー登録」は同じページを開き、モーダル表示用フラグを付与）
-	 * 表示前に締め切り過ぎの会員を自動で「日付完了」に更新
+	 * 表示前に退会日過ぎの会員を自動で「日付完了」に更新
 	 */
 	public function render_list_page() {
-		// 締め切りを過ぎた会員は自動で status を expired に更新（アクセス無効化）
+		// 退会日を過ぎた会員は自動で status を expired に更新（アクセス無効化）
 		LFT_Membership_DB::expire_overdue_members();
 		$open_add_modal = isset( $_GET['action'] ) && $_GET['action'] === 'add';
 		include LFT_MEMBERSHIP_PLUGIN_DIR . 'admin/views/user-list.php';
@@ -152,7 +152,7 @@ class LFT_Membership_Admin {
 	}
 
 	/**
-	 * 日付が期限切れか（締め切りを過ぎていれば expired 扱い）
+	 * 日付が期限切れか（退会日を過ぎていれば expired 扱い）
 	 *
 	 * @param string|null $deadline Y-m-d
 	 * @return bool

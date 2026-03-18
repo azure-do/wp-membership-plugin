@@ -106,6 +106,9 @@ $forgot_url = home_url('/' . LFT_MEMBERSHIP_SLUG . '/forgot/');
 			<p class="lft-login-links">
 				<a href="<?php echo esc_url($forgot_url); ?>">パスワードを忘れた方はこちら</a>
 			</p>
+			<p class="lft-login-links">
+				<a href="<?php echo esc_url( home_url( '/' ) ); ?>">トップページへ戻る</a>
+			</p>
 		</div>
 	</div>
 	<?php wp_footer(); ?>
