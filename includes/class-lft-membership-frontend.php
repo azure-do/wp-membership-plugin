@@ -804,7 +804,7 @@ class LFT_Membership_Frontend
 					$display   = ! empty($member->user_name) ? trim((string) $member->user_name) : $email;
 					$subject   = apply_filters(
 						'lft_membership_password_reset_email_subject',
-						'[' . wp_specialchars_decode(get_bloginfo('name'), ENT_QUOTES) . '] パスワード再設定のご案内',
+						'パスワード再設定のご案内',
 						$member,
 						$reset_url
 					);
@@ -947,7 +947,7 @@ MAIL;
 		$member_page_url = untrailingslashit(home_url('/' . $this->slug));
 		$subject         = apply_filters(
 			'lft_membership_registration_confirmation_subject',
-			'[' . $site_name . '] 会員専用サイトご登録のお礼とご案内',
+			'会員専用サイトご登録のお礼とご案内',
 			$display,
 			$email
 		);
@@ -1068,7 +1068,7 @@ MAIL;
 		}
 		$subject = apply_filters(
 			'lft_membership_password_changed_email_subject',
-			'[' . $site_name . '] パスワード変更が完了しました',
+			'パスワード変更が完了しました',
 			$email,
 			$login_url
 		);

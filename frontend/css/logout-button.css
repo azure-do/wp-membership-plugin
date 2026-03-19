@@ -52,9 +52,8 @@
 
 @media (max-width: 782px) {
   .lft-membership-logout-btn {
+    top: 60px;
     right: 16px;
-		top: auto;
-    bottom: 5px;
     padding: 8px 14px;
     font-size: 13px;
   }
