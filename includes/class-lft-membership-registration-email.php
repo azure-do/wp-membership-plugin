@@ -31,7 +31,7 @@ class LFT_Membership_Registration_Email {
 
 		$subject = apply_filters(
 			'lft_membership_registration_invite_subject',
-			'会員専用ページ パスワード設定のご案内',
+			'【要対応】会員専用ページ：パスワード設定のご案内',
 			$display_name,
 			$email,
 			$register_url
