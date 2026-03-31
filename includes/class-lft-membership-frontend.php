@@ -30,13 +30,17 @@ class LFT_Membership_Frontend
 		add_action('template_redirect', array($this, 'redirect_protected_page_to_login'), 1);
 		add_action('template_redirect', array($this, 'handle_registration_page'), 5);
 		add_action('template_redirect', array($this, 'handle_confirmed_user_page'), 5);
+		add_action('template_redirect', array($this, 'handle_confirm_email_change_page'), 5);
 		add_action('template_redirect', array($this, 'handle_login_page'), 5);
 		add_action('template_redirect', array($this, 'handle_forgot_page'), 5);
 		add_action('template_redirect', array($this, 'handle_edit_page'), 20);
 		add_action('template_redirect', array($this, 'handle_logout'), 5);
+		add_action('wp_ajax_lft_membership_request_email_change', array($this, 'ajax_request_email_change'));
+		add_action('wp_ajax_nopriv_lft_membership_request_email_change', array($this, 'ajax_request_email_change'));
 		add_action('wp_enqueue_scripts', array($this, 'maybe_enqueue_register_assets'), 20);
 		add_action('wp_enqueue_scripts', array($this, 'enqueue_logout_button_assets'), 20);
 		add_action('wp_head', array($this, 'inject_logout_button_script'), 999);
+		add_action('init', array($this, 'maybe_send_expiration_reminders'), 30);
 		// テーマの the_password_form より後に出すため priority 999（どのサイトでもプラグインのログインフォームを表示）
 		add_filter('post_password_required', array($this, 'filter_post_password_required'), 10, 2);
 		add_filter('the_password_form', array($this, 'filter_the_password_form'), 999, 1);
@@ -86,6 +90,11 @@ class LFT_Membership_Frontend
 		add_rewrite_rule(
 			$slug . '/logout/?$',
 			'index.php?lft_membership=logout',
+			'top'
+		);
+		add_rewrite_rule(
+			$slug . '/confirm_email/([^/]+)/?$',
+			'index.php?lft_membership=confirm_email&lft_token=$matches[1]',
 			'top'
 		);
 	}
@@ -139,6 +148,48 @@ class LFT_Membership_Frontend
 		// サブディレクトリ設置でも正しいフルURLにする（base + path）
 		$base = trailingslashit(home_url('/'));
 		return $base . ltrim($path_or_url, '/');
+	}
+
+	/**
+	 * 日付表示を整形
+	 *
+	 * @param string|null $date_string
+	 * @param string      $empty_label
+	 * @return string
+	 */
+	private function format_member_date($date_string, $empty_label = '—')
+	{
+		if (empty($date_string)) {
+			return $empty_label;
+		}
+		$timestamp = strtotime($date_string);
+		return $timestamp ? date_i18n('Y.m.d', $timestamp) : $empty_label;
+	}
+
+	/**
+	 * 会員期限の前日通知を送信（1会員につき1回）
+	 */
+	public function maybe_send_expiration_reminders()
+	{
+		if (is_admin() && ! wp_doing_ajax()) {
+			return;
+		}
+
+		LFT_Membership_DB::create_tables();
+		$members = LFT_Membership_DB::get_members_expiring_tomorrow();
+		if (empty($members)) {
+			return;
+		}
+
+		foreach ($members as $member) {
+			$sent = $this->send_expiration_reminder_email($member);
+			if (! $sent) {
+				continue;
+			}
+			LFT_Membership_DB::update_member($member->id, array(
+				'expiration_notice_sent_at' => current_time('mysql'),
+			));
+		}
 	}
 
 	/** 会員セッション用 Cookie 名 */
@@ -339,7 +390,8 @@ class LFT_Membership_Frontend
 	}
 
 	/**
-	 * 固定ログアウトボタンをJSで body に注入（ヘッダー・フッターの有無に依存しない）
+	 * 固定マイページボタンをJSで body に注入（ヘッダー・フッターの有無に依存しない）
+	 * 旧ログアウトボタンのコードは復旧用にコメントで残している
 	 */
 	public function inject_logout_button_script()
 	{
@@ -351,11 +403,39 @@ class LFT_Membership_Frontend
 			return;
 		}
 		$logout_url = home_url('/' . $this->slug . '/logout/');
+		$confirm_message = __('確認メールを現在のメールアドレスに送信しました。メール内のURLをクリックすると変更が完了します。', 'lft-membership');
+		$started_date = $this->format_member_date($member->payment_date, '—');
+		$end_date = $this->format_member_date($member->deadline, __('期限なし', 'lft-membership'));
+		$ajax_url = admin_url('admin-ajax.php');
+		$nonce = wp_create_nonce('lft_membership_my_page');
 	?>
 		<script>
 			(function() {
-				var url = <?php echo json_encode($logout_url); ?>;
-				var title = <?php echo json_encode(__('ログアウト', 'lft-membership')); ?>;
+				var myPageData = {
+					ajaxUrl: <?php echo wp_json_encode($ajax_url); ?>,
+					nonce: <?php echo wp_json_encode($nonce); ?>,
+					logoutUrl: <?php echo wp_json_encode($logout_url); ?>,
+					email: <?php echo wp_json_encode($member->email); ?>,
+					startedDate: <?php echo wp_json_encode($started_date); ?>,
+					endDate: <?php echo wp_json_encode($end_date); ?>,
+					buttonLabel: <?php echo wp_json_encode(__('マイページ', 'lft-membership')); ?>,
+					modalTitle: <?php echo wp_json_encode(__('マイページ', 'lft-membership')); ?>,
+					saveLabel: <?php echo wp_json_encode(__('保存する', 'lft-membership')); ?>,
+					cancelLabel: <?php echo wp_json_encode(__('閉じる', 'lft-membership')); ?>,
+					logoutLabel: <?php echo wp_json_encode(__('ログアウト', 'lft-membership')); ?>,
+					confirmMessage: <?php echo wp_json_encode($confirm_message); ?>,
+					errorMessage: <?php echo wp_json_encode(__('保存に失敗しました。もう一度お試しください。', 'lft-membership')); ?>,
+					labels: {
+						mail: <?php echo wp_json_encode(__('メールアドレス', 'lft-membership')); ?>,
+						startedDate: <?php echo wp_json_encode(__('開始日', 'lft-membership')); ?>,
+						endDate: <?php echo wp_json_encode(__('終了日', 'lft-membership')); ?>
+					}
+				};
+
+				/*
+				Old logout-only injector (kept for recovery):
+				var url = <?php echo wp_json_encode($logout_url); ?>;
+				var title = <?php echo wp_json_encode(__('ログアウト', 'lft-membership')); ?>;
 
 				function addLogoutBtn() {
 					if (document.getElementById('lft-membership-logout-btn')) return;
@@ -372,10 +452,120 @@ class LFT_Membership_Frontend
 						'<span class="lft-membership-logout-btn__label">' + title + '</span>';
 					document.body.appendChild(a);
 				}
+				*/
+
+				function setStatus(message, isError) {
+					var status = document.getElementById('lft-membership-mypage-status');
+					if (!status) return;
+					status.textContent = message || '';
+					status.className = 'lft-membership-mypage-status' + (isError ? ' is-error' : ' is-success');
+				}
+
+				function closeModal() {
+					var modal = document.getElementById('lft-membership-mypage-modal');
+					if (!modal) return;
+					modal.classList.remove('is-open');
+				}
+
+				function openModal() {
+					var modal = document.getElementById('lft-membership-mypage-modal');
+					if (!modal) return;
+					setStatus('', false);
+					modal.classList.add('is-open');
+				}
+
+				function saveEmailChange() {
+					var input = document.getElementById('lft-membership-mypage-email');
+					var button = document.getElementById('lft-membership-mypage-save');
+					if (!input || !button) return;
+					var formData = new FormData();
+					formData.append('action', 'lft_membership_request_email_change');
+					formData.append('nonce', myPageData.nonce);
+					formData.append('email', input.value);
+					button.disabled = true;
+					fetch(myPageData.ajaxUrl, {
+						method: 'POST',
+						credentials: 'same-origin',
+						body: formData
+					})
+					.then(function(response) {
+						return response.json();
+					})
+					.then(function(response) {
+						if (response && response.success) {
+							setStatus(response.data && response.data.message ? response.data.message : myPageData.confirmMessage, false);
+						} else {
+							setStatus(response && response.data && response.data.message ? response.data.message : myPageData.errorMessage, true);
+						}
+					})
+					.catch(function() {
+						setStatus(myPageData.errorMessage, true);
+					})
+					.finally(function() {
+						button.disabled = false;
+					});
+				}
+
+				function createModal() {
+					if (document.getElementById('lft-membership-mypage-modal')) return;
+					var modal = document.createElement('div');
+					modal.id = 'lft-membership-mypage-modal';
+					modal.className = 'lft-membership-mypage-modal';
+					modal.innerHTML =
+						'<div class="lft-membership-mypage-modal__backdrop" data-close="1"></div>' +
+						'<div class="lft-membership-mypage-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="lft-membership-mypage-title">' +
+							'<button type="button" class="lft-membership-mypage-modal__close" data-close="1" aria-label="' + myPageData.cancelLabel + '">&times;</button>' +
+							'<h2 id="lft-membership-mypage-title" class="lft-membership-mypage-modal__title">' + myPageData.modalTitle + '</h2>' +
+							'<div class="lft-membership-mypage-modal__field">' +
+								'<label for="lft-membership-mypage-email">' + myPageData.labels.mail + '</label>' +
+								'<input type="email" id="lft-membership-mypage-email" value="' + myPageData.email.replace(/"/g, '&quot;') + '">' +
+							'</div>' +
+							'<div class="lft-membership-mypage-modal__summary">' +
+								'<div><span>' + myPageData.labels.startedDate + '</span><strong>' + myPageData.startedDate + '</strong></div>' +
+								'<div><span>' + myPageData.labels.endDate + '</span><strong>' + myPageData.endDate + '</strong></div>' +
+							'</div>' +
+							'<p id="lft-membership-mypage-status" class="lft-membership-mypage-status" aria-live="polite"></p>' +
+							'<div class="lft-membership-mypage-modal__actions">' +
+								'<button type="button" id="lft-membership-mypage-save" class="lft-membership-mypage-modal__save">' + myPageData.saveLabel + '</button>' +
+								'<a href="' + myPageData.logoutUrl + '" class="lft-membership-mypage-modal__logout">' + myPageData.logoutLabel + '</a>' +
+							'</div>' +
+						'</div>';
+					document.body.appendChild(modal);
+					modal.addEventListener('click', function(event) {
+						if (event.target && event.target.getAttribute('data-close') === '1') {
+							closeModal();
+						}
+					});
+					document.addEventListener('keydown', function(event) {
+						if (event.key === 'Escape') {
+							closeModal();
+						}
+					});
+					var save = document.getElementById('lft-membership-mypage-save');
+					if (save) {
+						save.addEventListener('click', saveEmailChange);
+					}
+				}
+
+				function addMyPageBtn() {
+					if (document.getElementById('lft-membership-mypage-btn')) return;
+					var button = document.createElement('button');
+					button.type = 'button';
+					button.id = 'lft-membership-mypage-btn';
+					button.className = 'lft-membership-mypage-btn';
+					button.title = myPageData.buttonLabel;
+					button.setAttribute('aria-label', myPageData.buttonLabel);
+					button.innerHTML =
+						'<svg class="lft-membership-mypage-btn__icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/></svg>';
+					button.addEventListener('click', openModal);
+					document.body.appendChild(button);
+					createModal();
+				}
+
 				if (document.body) {
-					addLogoutBtn();
+					addMyPageBtn();
 				} else {
-					document.addEventListener('DOMContentLoaded', addLogoutBtn);
+					document.addEventListener('DOMContentLoaded', addMyPageBtn);
 				}
 			})();
 		</script>
@@ -929,6 +1119,103 @@ MAIL;
 	}
 
 	/**
+	 * AJAX: マイページからメール変更を申請し、元メールアドレスへ確認URLを送信
+	 */
+	public function ajax_request_email_change()
+	{
+		check_ajax_referer('lft_membership_my_page', 'nonce');
+
+		$member = $this->get_current_lft_member();
+		if (! $member) {
+			wp_send_json_error(array('message' => 'ログイン情報を確認できませんでした。再度ログインしてください。'), 403);
+		}
+
+		$new_email = isset($_POST['email']) ? sanitize_email(wp_unslash($_POST['email'])) : '';
+		if (empty($new_email) || ! is_email($new_email)) {
+			wp_send_json_error(array('message' => '有効なメールアドレスを入力してください。'));
+		}
+		if (strcasecmp($new_email, $member->email) === 0) {
+			wp_send_json_error(array('message' => '現在のメールアドレスと同じです。'));
+		}
+
+		$existing = LFT_Membership_DB::get_member_by_email($new_email);
+		if ($existing && (int) $existing->id !== (int) $member->id) {
+			wp_send_json_error(array('message' => 'そのメールアドレスは既に使用されています。'));
+		}
+
+		LFT_Membership_DB::create_tables();
+
+		$confirm_token = LFT_Membership_DB::generate_token();
+		$updated = LFT_Membership_DB::update_member($member->id, array(
+			'pending_email'             => $new_email,
+			'email_change_token'        => $confirm_token,
+			'email_change_requested_at' => current_time('mysql'),
+		));
+		if (! $updated) {
+			wp_send_json_error(array('message' => 'メール変更の準備に失敗しました。'));
+		}
+
+		$confirm_url = home_url('/' . $this->slug . '/confirm_email/' . $confirm_token . '/');
+		$sent = $this->send_email_change_confirmation_email($member->email, $member->user_name, $new_email, $confirm_url);
+		if (! $sent) {
+			LFT_Membership_DB::update_member($member->id, array(
+				'pending_email'             => '',
+				'email_change_token'        => '',
+				'email_change_requested_at' => null,
+			));
+			wp_send_json_error(array('message' => '確認メールの送信に失敗しました。'));
+		}
+
+		wp_send_json_success(array(
+			'message' => '確認メールを現在のメールアドレスに送信しました。メール内のURLをクリックすると変更が完了します。',
+		));
+	}
+
+	/**
+	 * /lft_membership/confirm_email/{token} メール変更確認
+	 */
+	public function handle_confirm_email_change_page()
+	{
+		if (get_query_var('lft_membership') !== 'confirm_email') {
+			return;
+		}
+
+		$token  = get_query_var('lft_token');
+		$member = $token ? LFT_Membership_DB::get_member_by_email_change_token($token) : null;
+		if (! $member || empty($member->pending_email) || $member->email_change_token !== $token) {
+			$this->render_error('このメール変更確認URLは無効か、既に使用済みです。');
+			exit;
+		}
+		if (! is_email($member->pending_email)) {
+			$this->render_error('変更先メールアドレスが不正です。管理者へお問い合わせください。');
+			exit;
+		}
+
+		$existing = LFT_Membership_DB::get_member_by_email($member->pending_email);
+		if ($existing && (int) $existing->id !== (int) $member->id) {
+			$this->render_error('変更先メールアドレスは既に使用されています。別のメールアドレスで再度お試しください。');
+			exit;
+		}
+
+		$new_email = $member->pending_email;
+		$updated   = LFT_Membership_DB::update_member($member->id, array(
+			'email'                     => $new_email,
+			'pending_email'             => '',
+			'email_change_token'        => '',
+			'email_change_requested_at' => null,
+		));
+		if (! $updated) {
+			$this->render_error('メールアドレスの更新に失敗しました。時間をおいて再度お試しください。');
+			exit;
+		}
+
+		$this->send_email_changed_notice_email($new_email, $member->user_name);
+		$login_url = home_url('/' . $this->slug . '/login/');
+		$this->render_error('メールアドレスを更新しました。以後は新しいメールアドレスと現在のパスワードでログインできます。<br><a href="' . esc_url($login_url) . '">ログインページへ</a>');
+		exit;
+	}
+
+	/**
 	 * 登録完了メールを送信（トークンURLで会員登録が成功したとき）
 	 *
 	 * @param string $email 送信先メール
@@ -1110,6 +1397,179 @@ LFT事務局でございます。
 ※このメールはセキュリティ保護のため、
 　パスワード変更が行われた際に自動送信しております。
 ※お客様ご自身で変更された場合は、本メールへの返信は不要です。
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+株式会社リーガルエステート
+Tel             045-620-2240
+Email(共通）　  info@s-legalestate.com
+Email(セミナー）seminar@s-legalestate.com
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MAIL;
+	}
+
+	/**
+	 * メール変更確認メールを送信
+	 *
+	 * @param string $current_email
+	 * @param string $user_name
+	 * @param string $new_email
+	 * @param string $confirm_url
+	 * @return bool
+	 */
+	private function send_email_change_confirmation_email($current_email, $user_name, $new_email, $confirm_url)
+	{
+		if (empty($current_email) || ! is_email($current_email)) {
+			return false;
+		}
+
+		$site_name = wp_specialchars_decode(get_bloginfo('name'), ENT_QUOTES);
+		$display   = is_string($user_name) ? trim($user_name) : '';
+		if ('' === $display) {
+			$display = $current_email;
+		}
+
+		$subject = '【要確認】メールアドレス変更のお手続き';
+		$body    = $this->get_email_change_confirmation_email_body($display, $new_email, $confirm_url, $site_name);
+		return (bool) wp_mail($current_email, $subject, $body, array('Content-Type: text/plain; charset=UTF-8'));
+	}
+
+	/**
+	 * メール変更確認メール本文
+	 *
+	 * @param string $user_name
+	 * @param string $new_email
+	 * @param string $confirm_url
+	 * @param string $site_name
+	 * @return string
+	 */
+	private function get_email_change_confirmation_email_body($user_name, $new_email, $confirm_url, $site_name)
+	{
+		return <<<MAIL
+【{$user_name}】様
+
+{$site_name} のマイページからメールアドレス変更が申請されました。
+
+変更先メールアドレス
+{$new_email}
+
+下記URLをクリックすると、メールアドレス変更が確定します。
+{$confirm_url}
+
+※心当たりがない場合は、本メールを破棄してください。
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+株式会社リーガルエステート
+Tel             045-620-2240
+Email(共通）　  info@s-legalestate.com
+Email(セミナー）seminar@s-legalestate.com
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MAIL;
+	}
+
+	/**
+	 * メール変更完了通知を新しいメールアドレスへ送信
+	 *
+	 * @param string $email
+	 * @param string $user_name
+	 * @return bool
+	 */
+	private function send_email_changed_notice_email($email, $user_name)
+	{
+		if (empty($email) || ! is_email($email)) {
+			return false;
+		}
+
+		$site_name = wp_specialchars_decode(get_bloginfo('name'), ENT_QUOTES);
+		$display   = is_string($user_name) ? trim($user_name) : '';
+		if ('' === $display) {
+			$display = $email;
+		}
+		$login_url = home_url('/' . $this->slug . '/login/');
+		$subject   = '【完了】メールアドレスの変更を承りました';
+		$body      = $this->get_email_changed_notice_email_body($display, $login_url, $site_name);
+		return (bool) wp_mail($email, $subject, $body, array('Content-Type: text/plain; charset=UTF-8'));
+	}
+
+	/**
+	 * 会員期限が明日に迫っていることを通知するメールを送信
+	 *
+	 * @param object $member
+	 * @return bool
+	 */
+	private function send_expiration_reminder_email($member)
+	{
+		if (! $member || empty($member->email) || ! is_email($member->email) || empty($member->deadline)) {
+			return false;
+		}
+
+		$site_name = wp_specialchars_decode(get_bloginfo('name'), ENT_QUOTES);
+		$display   = is_string($member->user_name) ? trim($member->user_name) : '';
+		if ('' === $display) {
+			$display = $member->email;
+		}
+		$deadline  = $this->format_member_date($member->deadline);
+		$login_url = home_url('/' . $this->slug . '/login/');
+		$subject   = '【ご案内】会員有効期限がまもなく終了します';
+		$body      = $this->get_expiration_reminder_email_body($display, $deadline, $login_url, $site_name);
+		return (bool) wp_mail($member->email, $subject, $body, array('Content-Type: text/plain; charset=UTF-8'));
+	}
+
+	/**
+	 * メール変更完了通知本文
+	 *
+	 * @param string $user_name
+	 * @param string $login_url
+	 * @param string $site_name
+	 * @return string
+	 */
+	private function get_email_changed_notice_email_body($user_name, $login_url, $site_name)
+	{
+		return <<<MAIL
+【{$user_name}】様
+
+{$site_name} のメールアドレス変更が完了しました。
+
+今後は新しいメールアドレスと現在のパスワードでログインしてください。
+
+■ ログインページはこちら
+{$login_url}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+株式会社リーガルエステート
+Tel             045-620-2240
+Email(共通）　  info@s-legalestate.com
+Email(セミナー）seminar@s-legalestate.com
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MAIL;
+	}
+
+	/**
+	 * 会員期限前日通知メール本文
+	 *
+	 * @param string $user_name
+	 * @param string $deadline
+	 * @param string $login_url
+	 * @param string $site_name
+	 * @return string
+	 */
+	private function get_expiration_reminder_email_body($user_name, $deadline, $login_url, $site_name)
+	{
+		return <<<MAIL
+【{$user_name}】様
+
+いつもご利用いただきありがとうございます。
+
+会員サービスの有効期限が、明日で終了予定となっております。
+
+■ 有効期限
+{$deadline}
+
+継続をご希望の場合は、お早めにお手続きまたは事務局までご連絡ください。
+
+■ ログインページ
+{$login_url}
+
+ご不明な点がございましたら、お気軽にお問い合わせください。
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 株式会社リーガルエステート

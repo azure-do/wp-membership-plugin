@@ -28,6 +28,8 @@ class LFT_Membership_DB
 			token varchar(64) NOT NULL DEFAULT '',
 			user_name varchar(255) NOT NULL DEFAULT '',
 			email varchar(255) NOT NULL DEFAULT '',
+			pending_email varchar(255) NOT NULL DEFAULT '',
+			email_change_token varchar(64) NOT NULL DEFAULT '',
 			company_name varchar(255) NOT NULL DEFAULT '',
 			phone varchar(50) NOT NULL DEFAULT '',
 			payment_date date DEFAULT NULL,
@@ -35,10 +37,13 @@ class LFT_Membership_DB
 			status varchar(20) NOT NULL DEFAULT 'pending',
 			wp_user_id bigint(20) unsigned DEFAULT NULL,
 			password_hash varchar(255) DEFAULT NULL,
+			email_change_requested_at datetime DEFAULT NULL,
+			expiration_notice_sent_at datetime DEFAULT NULL,
 			created_at datetime DEFAULT CURRENT_TIMESTAMP,
 			updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 			PRIMARY KEY (id),
 			UNIQUE KEY token (token),
+			KEY email_change_token (email_change_token),
 			KEY status (status),
 			KEY email (email)
 		) {$charset};";
@@ -46,8 +51,10 @@ class LFT_Membership_DB
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 		dbDelta($sql);
 
-		// 既存テーブルに password_hash カラムが無い場合は追加（マイグレーション）
+		// 既存テーブルに password_hash / email change / reminder カラムが無い場合は追加（マイグレーション）
 		self::maybe_add_password_hash_column();
+		self::maybe_add_email_change_columns();
+		self::maybe_add_expiration_notice_column();
 	}
 
 	/**
@@ -66,6 +73,48 @@ class LFT_Membership_DB
 		if (false === $added && $wpdb->last_error) {
 			$wpdb->query("ALTER TABLE `{$table}` ADD COLUMN password_hash varchar(255) DEFAULT NULL");
 		}
+	}
+
+	/**
+	 * 既存の会員テーブルにメール変更用カラムが無ければ追加する
+	 */
+	public static function maybe_add_email_change_columns()
+	{
+		global $wpdb;
+		$table = $wpdb->prefix . self::TABLE_MEMBERS;
+
+		$columns = array(
+			'pending_email'             => "ALTER TABLE `{$table}` ADD COLUMN pending_email varchar(255) NOT NULL DEFAULT '' AFTER email",
+			'email_change_token'        => "ALTER TABLE `{$table}` ADD COLUMN email_change_token varchar(64) NOT NULL DEFAULT '' AFTER pending_email",
+			'email_change_requested_at' => "ALTER TABLE `{$table}` ADD COLUMN email_change_requested_at datetime DEFAULT NULL AFTER password_hash",
+		);
+
+		foreach ($columns as $column_name => $sql) {
+			$exists = $wpdb->get_results($wpdb->prepare("SHOW COLUMNS FROM `{$table}` LIKE %s", $column_name));
+			if (! empty($exists)) {
+				continue;
+			}
+			$wpdb->query($sql);
+		}
+
+		$index_exists = $wpdb->get_results("SHOW INDEX FROM `{$table}` WHERE Key_name = 'email_change_token'");
+		if (empty($index_exists)) {
+			$wpdb->query("ALTER TABLE `{$table}` ADD KEY email_change_token (email_change_token)");
+		}
+	}
+
+	/**
+	 * 既存の会員テーブルに期限切れ事前通知カラムが無ければ追加する
+	 */
+	public static function maybe_add_expiration_notice_column()
+	{
+		global $wpdb;
+		$table  = $wpdb->prefix . self::TABLE_MEMBERS;
+		$exists = $wpdb->get_results($wpdb->prepare("SHOW COLUMNS FROM `{$table}` LIKE %s", 'expiration_notice_sent_at'));
+		if (! empty($exists)) {
+			return;
+		}
+		$wpdb->query("ALTER TABLE `{$table}` ADD COLUMN expiration_notice_sent_at datetime DEFAULT NULL AFTER email_change_requested_at");
 	}
 
 	/**
@@ -94,12 +143,16 @@ class LFT_Membership_DB
 			'token'         => '',
 			'user_name'     => '',
 			'email'         => '',
+			'pending_email' => '',
+			'email_change_token' => '',
 			'company_name'  => '',
 			'phone'         => '',
 			'payment_date'  => null,
 			'deadline'      => null,
 			'status'        => 'pending',
 			'wp_user_id'    => null,
+			'email_change_requested_at' => null,
+			'expiration_notice_sent_at' => null,
 		);
 
 		$row = wp_parse_args($data, $defaults);
@@ -109,7 +162,7 @@ class LFT_Membership_DB
 			return false;
 		}
 
-		$wpdb->insert($table, $row, array('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d'));
+		$wpdb->insert($table, $row, array('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s'));
 		return $wpdb->insert_id ? (int) $wpdb->insert_id : false;
 	}
 
@@ -125,7 +178,7 @@ class LFT_Membership_DB
 		global $wpdb;
 		$table = self::get_table_name();
 
-		$allowed = array('token', 'user_name', 'email', 'company_name', 'phone', 'payment_date', 'deadline', 'status', 'wp_user_id', 'password_hash');
+		$allowed = array('token', 'user_name', 'email', 'pending_email', 'email_change_token', 'company_name', 'phone', 'payment_date', 'deadline', 'status', 'wp_user_id', 'password_hash', 'email_change_requested_at', 'expiration_notice_sent_at');
 		$row = array_intersect_key($data, array_flip($allowed));
 		if (empty($row)) {
 			return false;
@@ -192,6 +245,47 @@ class LFT_Membership_DB
 		global $wpdb;
 		$table = self::get_table_name();
 		return $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE email = %s", $email));
+	}
+
+	/**
+	 * メール変更確認トークンで会員を1件取得
+	 *
+	 * @param string $token
+	 * @return object|null
+	 */
+	public static function get_member_by_email_change_token($token)
+	{
+		if (empty($token)) {
+			return null;
+		}
+		global $wpdb;
+		$table = self::get_table_name();
+		return $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE email_change_token = %s", $token));
+	}
+
+	/**
+	 * 明日が締め切りで、まだ事前通知を送っていない会員一覧を取得
+	 *
+	 * @return array
+	 */
+	public static function get_members_expiring_tomorrow()
+	{
+		global $wpdb;
+		$table    = self::get_table_name();
+		$tomorrow = gmdate('Y-m-d', strtotime(current_time('Y-m-d') . ' +1 day'));
+
+		$query = $wpdb->prepare(
+			"SELECT * FROM {$table}
+			WHERE deadline = %s
+			AND email <> ''
+			AND password_hash IS NOT NULL
+			AND password_hash <> ''
+			AND status NOT IN ('expired', 'suspended')
+			AND (expiration_notice_sent_at IS NULL OR expiration_notice_sent_at = '')",
+			$tomorrow
+		);
+
+		return $wpdb->get_results($query);
 	}
 
 	/**

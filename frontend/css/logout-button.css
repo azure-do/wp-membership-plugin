@@ -1,65 +1,210 @@
 /**
- * LFT Membership - 固定ログアウトボタン（テキスト＋アイコン）
- * PC/スマホ共通で右下に赤いフラットボタンを表示
+ * LFT Membership - 固定マイページボタン + モーダル
  */
 
-.lft-membership-logout-btn {
+.lft-membership-mypage-btn {
   position: fixed;
+  top: 24px;
   right: 24px;
-  top: 28px;
+  bottom: auto;
   z-index: 9999;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  background: #c01f0e;
-  color: #ffffff;
-  text-decoration: none;
-  border-radius: 0;
-  border: none;
-  font-size: 14px;
-  font-weight: 600;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: #2d2a45;
+  color: #fff;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22);
+  cursor: pointer;
 }
 
-.lft-membership-logout-btn:hover,
-.lft-membership-logout-btn:focus {
-  background: #a01b0c;
-  color: #ffffff;
+.lft-membership-mypage-btn:hover,
+.lft-membership-mypage-btn:focus {
+  background: rgb(26, 24, 44);
+  color: #fff;
 }
 
-.lft-membership-logout-btn__icon-wrap {
+.lft-membership-mypage-btn__icon {
+  display: block;
+  width: 20px;
+  height: 20px;
+}
+
+.lft-membership-mypage-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: none;
+}
+
+.lft-membership-mypage-modal.is-open {
+  display: block;
+}
+
+.lft-membership-mypage-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(17, 18, 20, 0.56);
+}
+
+.lft-membership-mypage-modal__dialog {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(92vw, 460px);
+  padding: 28px 24px 24px;
+  transform: translate(-50%, -50%);
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.28);
+}
+
+.lft-membership-mypage-modal__close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  border: 0;
+  background: transparent;
+  color: #6b7280;
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.lft-membership-mypage-modal__title {
+  margin: 0 0 18px;
+  font-size: 24px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.lft-membership-mypage-modal__field {
+  margin-bottom: 18px;
+}
+
+.lft-membership-mypage-modal__field label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #374151;
+}
+
+.lft-membership-mypage-modal__field input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  font-size: 15px;
+}
+
+.lft-membership-mypage-modal__summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.lft-membership-mypage-modal__summary div {
+  padding: 12px 14px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+}
+
+.lft-membership-mypage-modal__summary span {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.lft-membership-mypage-modal__summary strong {
+  display: block;
+  font-size: 15px;
+  color: #111827;
+}
+
+.lft-membership-mypage-status {
+  min-height: 22px;
+  margin: 0 0 14px;
+  font-size: 13px;
+}
+
+.lft-membership-mypage-status.is-success {
+  color: #047857;
+}
+
+.lft-membership-mypage-status.is-error {
+  color: #b91c1c;
+}
+
+.lft-membership-mypage-modal__actions {
+  display: flex;
+  gap: 10px;
+}
+
+.lft-membership-mypage-modal__save,
+.lft-membership-mypage-modal__logout {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
 }
 
-.lft-membership-logout-btn__icon {
-  display: block;
-  width: 18px;
-  height: 18px;
+.lft-membership-mypage-modal__save {
+  flex: 1 1 auto;
+  border: 0;
+  background: #111827;
+  color: #fff;
+  cursor: pointer;
 }
 
-.lft-membership-logout-btn__label {
-  line-height: 1;
+.lft-membership-mypage-modal__save:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
-@media (max-width: 1024px) {
-  .lft-membership-logout-btn {
-    top: 64px;
-  }
+.lft-membership-mypage-modal__logout {
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #111827;
 }
 
 @media (max-width: 782px) {
-  .lft-membership-logout-btn {
-    top: 60px;
+  .lft-membership-mypage-btn {
+		width: 40px;
+		height: 40px;
+    top: 18px;
     right: 16px;
-    padding: 8px 14px;
-    font-size: 13px;
   }
 
-  .lft-membership-logout-btn__label {
-    display: none !important;
-		bottom: 5px;
+  .lft-membership-mypage-modal__dialog {
+    top: auto;
+    right: 16px;
+    bottom: 84px;
+    left: 16px;
+    width: auto;
+    transform: none;
+  }
+
+  .lft-membership-mypage-modal__summary {
+    grid-template-columns: 1fr;
+  }
+
+  .lft-membership-mypage-modal__actions {
+    flex-direction: column;
   }
 }
