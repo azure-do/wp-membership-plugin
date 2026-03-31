@@ -138,6 +138,10 @@
   font-size: 13px;
 }
 
+.lft-membership-mypage-status[hidden] {
+  display: none !important;
+}
+
 .lft-membership-mypage-status.is-success {
   color: #047857;
 }

@@ -458,6 +458,12 @@ class LFT_Membership_Frontend
 					var status = document.getElementById('lft-membership-mypage-status');
 					if (!status) return;
 					status.textContent = message || '';
+					if (!message) {
+						status.className = 'lft-membership-mypage-status';
+						status.setAttribute('hidden', 'hidden');
+						return;
+					}
+					status.removeAttribute('hidden');
 					status.className = 'lft-membership-mypage-status' + (isError ? ' is-error' : ' is-success');
 				}
 
@@ -474,14 +480,27 @@ class LFT_Membership_Frontend
 					modal.classList.add('is-open');
 				}
 
-				function saveEmailChange() {
+				function saveEmailChange(event) {
+					if (event) {
+						event.preventDefault();
+						event.stopPropagation();
+					}
 					var input = document.getElementById('lft-membership-mypage-email');
 					var button = document.getElementById('lft-membership-mypage-save');
 					if (!input || !button) return;
+					var email = input.value ? input.value.trim() : '';
+					if (!email) {
+						setStatus('メールアドレスを入力してください。', true);
+						return;
+					}
+					if (email === myPageData.email) {
+						setStatus('', false);
+						return;
+					}
 					var formData = new FormData();
 					formData.append('action', 'lft_membership_request_email_change');
 					formData.append('nonce', myPageData.nonce);
-					formData.append('email', input.value);
+					formData.append('email', email);
 					button.disabled = true;
 					fetch(myPageData.ajaxUrl, {
 						method: 'POST',
@@ -524,7 +543,7 @@ class LFT_Membership_Frontend
 								'<div><span>' + myPageData.labels.startedDate + '</span><strong>' + myPageData.startedDate + '</strong></div>' +
 								'<div><span>' + myPageData.labels.endDate + '</span><strong>' + myPageData.endDate + '</strong></div>' +
 							'</div>' +
-							'<p id="lft-membership-mypage-status" class="lft-membership-mypage-status" aria-live="polite"></p>' +
+							'<p id="lft-membership-mypage-status" class="lft-membership-mypage-status" aria-live="polite" hidden></p>' +
 							'<div class="lft-membership-mypage-modal__actions">' +
 								'<button type="button" id="lft-membership-mypage-save" class="lft-membership-mypage-modal__save">' + myPageData.saveLabel + '</button>' +
 								'<a href="' + myPageData.logoutUrl + '" class="lft-membership-mypage-modal__logout">' + myPageData.logoutLabel + '</a>' +
