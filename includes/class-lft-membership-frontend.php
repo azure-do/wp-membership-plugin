@@ -1203,7 +1203,7 @@ MAIL;
 		}
 
 		$confirm_url = home_url('/' . $this->slug . '/confirm_email/' . $confirm_token . '/');
-		$sent = $this->send_email_change_confirmation_email($member->email, $member->user_name, $new_email, $confirm_url);
+		$sent = $this->send_email_change_confirmation_email($new_email, $member->user_name, $new_email, $confirm_url);
 		if (! $sent) {
 			LFT_Membership_DB::update_member($member->id, array(
 				'pending_email'             => '',
@@ -1457,27 +1457,27 @@ MAIL;
 	/**
 	 * メール変更確認メールを送信
 	 *
-	 * @param string $current_email
+	 * @param string $target_email
 	 * @param string $user_name
 	 * @param string $new_email
 	 * @param string $confirm_url
 	 * @return bool
 	 */
-	private function send_email_change_confirmation_email($current_email, $user_name, $new_email, $confirm_url)
+	private function send_email_change_confirmation_email($target_email, $user_name, $new_email, $confirm_url)
 	{
-		if (empty($current_email) || ! is_email($current_email)) {
+		if (empty($target_email) || ! is_email($target_email)) {
 			return false;
 		}
 
 		$site_name = wp_specialchars_decode(get_bloginfo('name'), ENT_QUOTES);
 		$display   = is_string($user_name) ? trim($user_name) : '';
 		if ('' === $display) {
-			$display = $current_email;
+			$display = $target_email;
 		}
 
 		$subject = '【要確認】メールアドレス変更のお手続き';
 		$body    = $this->get_email_change_confirmation_email_body($display, $new_email, $confirm_url, $site_name);
-		return (bool) wp_mail($current_email, $subject, $body, array('Content-Type: text/plain; charset=UTF-8'));
+		return (bool) wp_mail($target_email, $subject, $body, array('Content-Type: text/plain; charset=UTF-8'));
 	}
 
 	/**
