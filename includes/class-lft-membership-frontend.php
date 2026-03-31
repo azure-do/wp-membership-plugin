@@ -410,7 +410,7 @@ class LFT_Membership_Frontend
 		$confirm_message = __('確認メールを現在のメールアドレスに送信しました。メール内のURLをクリックすると変更が完了します。', 'lft-membership');
 		$started_date = $this->format_member_date($member->payment_date, '—');
 		$end_date = $this->format_member_date($member->deadline, __('期限なし', 'lft-membership'));
-		$ajax_url = home_url('/' . $this->slug . '/api/request_email_change/');
+		$ajax_url = add_query_arg('lft_membership', 'request_email_change', home_url('/'));
 		$nonce = wp_create_nonce('lft_membership_my_page');
 	?>
 		<script>
