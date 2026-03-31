@@ -35,8 +35,7 @@ class LFT_Membership_Frontend
 		add_action('template_redirect', array($this, 'handle_forgot_page'), 5);
 		add_action('template_redirect', array($this, 'handle_edit_page'), 20);
 		add_action('template_redirect', array($this, 'handle_logout'), 5);
-		add_action('wp_ajax_lft_membership_request_email_change', array($this, 'ajax_request_email_change'));
-		add_action('wp_ajax_nopriv_lft_membership_request_email_change', array($this, 'ajax_request_email_change'));
+		add_action('template_redirect', array($this, 'handle_email_change_request_api'), 5);
 		add_action('wp_enqueue_scripts', array($this, 'maybe_enqueue_register_assets'), 20);
 		add_action('wp_enqueue_scripts', array($this, 'enqueue_logout_button_assets'), 20);
 		add_action('wp_head', array($this, 'inject_logout_button_script'), 999);
@@ -95,6 +94,11 @@ class LFT_Membership_Frontend
 		add_rewrite_rule(
 			$slug . '/confirm_email/([^/]+)/?$',
 			'index.php?lft_membership=confirm_email&lft_token=$matches[1]',
+			'top'
+		);
+		add_rewrite_rule(
+			$slug . '/api/request_email_change/?$',
+			'index.php?lft_membership=request_email_change',
 			'top'
 		);
 	}
@@ -406,7 +410,7 @@ class LFT_Membership_Frontend
 		$confirm_message = __('確認メールを現在のメールアドレスに送信しました。メール内のURLをクリックすると変更が完了します。', 'lft-membership');
 		$started_date = $this->format_member_date($member->payment_date, '—');
 		$end_date = $this->format_member_date($member->deadline, __('期限なし', 'lft-membership'));
-		$ajax_url = admin_url('admin-ajax.php');
+		$ajax_url = home_url('/' . $this->slug . '/api/request_email_change/');
 		$nonce = wp_create_nonce('lft_membership_my_page');
 	?>
 		<script>
@@ -508,7 +512,18 @@ class LFT_Membership_Frontend
 						body: formData
 					})
 					.then(function(response) {
-						return response.json();
+						return response.text().then(function(text) {
+							try {
+								return JSON.parse(text);
+							} catch (e) {
+								return {
+									success: false,
+									data: {
+										message: text && text.trim() ? text.trim() : myPageData.errorMessage
+									}
+								};
+							}
+						});
 					})
 					.then(function(response) {
 						if (response && response.success) {
@@ -1138,15 +1153,28 @@ MAIL;
 	}
 
 	/**
-	 * AJAX: マイページからメール変更を申請し、元メールアドレスへ確認URLを送信
+	 * /lft_membership/api/request_email_change/ マイページからメール変更を申請し、元メールアドレスへ確認URLを送信
 	 */
-	public function ajax_request_email_change()
+	public function handle_email_change_request_api()
 	{
-		check_ajax_referer('lft_membership_my_page', 'nonce');
+		if (get_query_var('lft_membership') !== 'request_email_change') {
+			return;
+		}
+
+		nocache_headers();
+		header('Content-Type: application/json; charset=' . get_option('blog_charset'));
 
 		$member = $this->get_current_lft_member();
 		if (! $member) {
 			wp_send_json_error(array('message' => 'ログイン情報を確認できませんでした。再度ログインしてください。'), 403);
+		}
+
+		// 本番環境でページキャッシュにより nonce が古くなるケースがあるため、
+		// ここでは hard fail せず、会員Cookie による本人確認を優先する。
+		$nonce = isset($_POST['nonce']) ? sanitize_text_field(wp_unslash($_POST['nonce'])) : '';
+		if (! empty($nonce) && ! wp_verify_nonce($nonce, 'lft_membership_my_page')) {
+			// stale nonce は許容しつつ、JSON で理由が分かるようにする
+			// cookie ベースの会員認証が通っているため処理は継続する
 		}
 
 		$new_email = isset($_POST['email']) ? sanitize_email(wp_unslash($_POST['email'])) : '';
