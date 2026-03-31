@@ -39,6 +39,7 @@ class LFT_Membership_DB
 			password_hash varchar(255) DEFAULT NULL,
 			email_change_requested_at datetime DEFAULT NULL,
 			expiration_notice_sent_at datetime DEFAULT NULL,
+			expiration_notice_processing_at datetime DEFAULT NULL,
 			created_at datetime DEFAULT CURRENT_TIMESTAMP,
 			updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 			PRIMARY KEY (id),
@@ -110,11 +111,18 @@ class LFT_Membership_DB
 	{
 		global $wpdb;
 		$table  = $wpdb->prefix . self::TABLE_MEMBERS;
-		$exists = $wpdb->get_results($wpdb->prepare("SHOW COLUMNS FROM `{$table}` LIKE %s", 'expiration_notice_sent_at'));
-		if (! empty($exists)) {
-			return;
+		$columns = array(
+			'expiration_notice_sent_at'       => "ALTER TABLE `{$table}` ADD COLUMN expiration_notice_sent_at datetime DEFAULT NULL AFTER email_change_requested_at",
+			'expiration_notice_processing_at' => "ALTER TABLE `{$table}` ADD COLUMN expiration_notice_processing_at datetime DEFAULT NULL AFTER expiration_notice_sent_at",
+		);
+
+		foreach ($columns as $column_name => $sql) {
+			$exists = $wpdb->get_results($wpdb->prepare("SHOW COLUMNS FROM `{$table}` LIKE %s", $column_name));
+			if (! empty($exists)) {
+				continue;
+			}
+			$wpdb->query($sql);
 		}
-		$wpdb->query("ALTER TABLE `{$table}` ADD COLUMN expiration_notice_sent_at datetime DEFAULT NULL AFTER email_change_requested_at");
 	}
 
 	/**
@@ -153,6 +161,7 @@ class LFT_Membership_DB
 			'wp_user_id'    => null,
 			'email_change_requested_at' => null,
 			'expiration_notice_sent_at' => null,
+			'expiration_notice_processing_at' => null,
 		);
 
 		$row = wp_parse_args($data, $defaults);
@@ -162,7 +171,7 @@ class LFT_Membership_DB
 			return false;
 		}
 
-		$wpdb->insert($table, $row, array('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s'));
+		$wpdb->insert($table, $row, array('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s'));
 		return $wpdb->insert_id ? (int) $wpdb->insert_id : false;
 	}
 
@@ -178,7 +187,7 @@ class LFT_Membership_DB
 		global $wpdb;
 		$table = self::get_table_name();
 
-		$allowed = array('token', 'user_name', 'email', 'pending_email', 'email_change_token', 'company_name', 'phone', 'payment_date', 'deadline', 'status', 'wp_user_id', 'password_hash', 'email_change_requested_at', 'expiration_notice_sent_at');
+		$allowed = array('token', 'user_name', 'email', 'pending_email', 'email_change_token', 'company_name', 'phone', 'payment_date', 'deadline', 'status', 'wp_user_id', 'password_hash', 'email_change_requested_at', 'expiration_notice_sent_at', 'expiration_notice_processing_at');
 		$row = array_intersect_key($data, array_flip($allowed));
 		if (empty($row)) {
 			return false;
@@ -274,6 +283,8 @@ class LFT_Membership_DB
 		$table    = self::get_table_name();
 		$tomorrow = gmdate('Y-m-d', strtotime(current_time('Y-m-d') . ' +1 day'));
 
+		$stale_processing_time = gmdate('Y-m-d H:i:s', strtotime(current_time('mysql') . ' -15 minutes'));
+
 		$query = $wpdb->prepare(
 			"SELECT * FROM {$table}
 			WHERE deadline = %s
@@ -281,11 +292,75 @@ class LFT_Membership_DB
 			AND password_hash IS NOT NULL
 			AND password_hash <> ''
 			AND status NOT IN ('expired', 'suspended')
-			AND (expiration_notice_sent_at IS NULL OR expiration_notice_sent_at = '')",
-			$tomorrow
+			AND (expiration_notice_sent_at IS NULL OR expiration_notice_sent_at = '')
+			AND (
+				expiration_notice_processing_at IS NULL
+				OR expiration_notice_processing_at = ''
+				OR expiration_notice_processing_at < %s
+			)",
+			$tomorrow,
+			$stale_processing_time
 		);
 
 		return $wpdb->get_results($query);
+	}
+
+	/**
+	 * 期限前日通知送信の処理権を取得する
+	 *
+	 * @param int $member_id
+	 * @return bool
+	 */
+	public static function claim_expiration_notice($member_id)
+	{
+		global $wpdb;
+		$table = self::get_table_name();
+		$now   = current_time('mysql');
+		$stale = gmdate('Y-m-d H:i:s', strtotime($now . ' -15 minutes'));
+
+		$updated = $wpdb->query($wpdb->prepare(
+			"UPDATE {$table}
+			SET expiration_notice_processing_at = %s
+			WHERE id = %d
+			AND (expiration_notice_sent_at IS NULL OR expiration_notice_sent_at = '')
+			AND (
+				expiration_notice_processing_at IS NULL
+				OR expiration_notice_processing_at = ''
+				OR expiration_notice_processing_at < %s
+			)",
+			$now,
+			$member_id,
+			$stale
+		));
+
+		return $updated === 1;
+	}
+
+	/**
+	 * 期限前日通知を送信済みにする
+	 *
+	 * @param int $member_id
+	 * @return bool
+	 */
+	public static function finalize_expiration_notice($member_id)
+	{
+		return self::update_member($member_id, array(
+			'expiration_notice_sent_at'       => current_time('mysql'),
+			'expiration_notice_processing_at' => null,
+		));
+	}
+
+	/**
+	 * 期限前日通知の処理ロックを解除する
+	 *
+	 * @param int $member_id
+	 * @return bool
+	 */
+	public static function release_expiration_notice_claim($member_id)
+	{
+		return self::update_member($member_id, array(
+			'expiration_notice_processing_at' => null,
+		));
 	}
 
 	/**

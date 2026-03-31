@@ -186,13 +186,16 @@ class LFT_Membership_Frontend
 		}
 
 		foreach ($members as $member) {
-			$sent = $this->send_expiration_reminder_email($member);
-			if (! $sent) {
+			if (! LFT_Membership_DB::claim_expiration_notice((int) $member->id)) {
 				continue;
 			}
-			LFT_Membership_DB::update_member($member->id, array(
-				'expiration_notice_sent_at' => current_time('mysql'),
-			));
+
+			$sent = $this->send_expiration_reminder_email($member);
+			if (! $sent) {
+				LFT_Membership_DB::release_expiration_notice_claim((int) $member->id);
+				continue;
+			}
+			LFT_Membership_DB::finalize_expiration_notice((int) $member->id);
 		}
 	}
 
