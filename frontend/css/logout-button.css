@@ -182,9 +182,17 @@
 }
 
 .lft-membership-mypage-modal__logout {
-  border: 1px solid #d1d5db;
-  background: #fff;
-  color: #111827;
+  border: 1px solid #b10909;
+  color: #b10909;
+	underline: none !important;
+}
+
+.lft-membership-mypage-modal__logout:hover,
+.lft-membership-mypage-modal__logout:focus {
+  background: #8f0505;
+  border-color: #8f0505;
+  color: #ffffff;
+	underline: none !important;
 }
 
 @media (max-width: 782px) {
