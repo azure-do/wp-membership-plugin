@@ -21,6 +21,7 @@ if (! isset($redirect_to)) {
 }
 $login_url  = home_url('/' . LFT_MEMBERSHIP_SLUG . '/login/');
 $forgot_url = home_url('/' . LFT_MEMBERSHIP_SLUG . '/forgot/');
+$contact_url = apply_filters('lft_membership_contact_form_url', home_url('/contact/'));
 ?>
 <!DOCTYPE html>
 <html <?php language_attributes(); ?>>
@@ -35,7 +36,7 @@ $forgot_url = home_url('/' . LFT_MEMBERSHIP_SLUG . '/forgot/');
 <body class="lft-membership-register-page lft-login-page">
 	<div class="lft-register-wrap">
 		<header class="lft-register-header">
-			<img src="<?php echo esc_url( LFT_MEMBERSHIP_PLUGIN_URL . 'frontend/images/logo.png' ); ?>" alt="LFT - 生前対策・家族信託コミュニティー ~ Life Family Trust ~" class="lft-register-logo-img" />
+			<img src="<?php echo esc_url(LFT_MEMBERSHIP_PLUGIN_URL . 'frontend/images/logo.png'); ?>" alt="LFT - 生前対策・家族信託コミュニティー ~ Life Family Trust ~" class="lft-register-logo-img" />
 		</header>
 
 		<div class="lft-register-card">
@@ -60,6 +61,7 @@ $forgot_url = home_url('/' . LFT_MEMBERSHIP_SLUG . '/forgot/');
 					<p class="lft-form-actions">
 						<button type="submit" class="lft-btn lft-btn--submit">ログイン</button>
 					</p>
+					<p class="lft-login-id-forgot"><a href="<?php echo esc_url($contact_url); ?>">IDをお忘れの方はこちら（事務局への問い合わせ先）</a></p>
 				</form>
 			<?php else : ?>
 				<form method="post" action="" class="lft-register-form" id="lft-login-form">
@@ -76,6 +78,7 @@ $forgot_url = home_url('/' . LFT_MEMBERSHIP_SLUG . '/forgot/');
 					<p class="lft-form-actions">
 						<button type="submit" class="lft-btn lft-btn--submit">ログイン</button>
 					</p>
+					<p class="lft-login-id-forgot"><a href="<?php echo esc_url($contact_url); ?>">IDをお忘れの方はこちら（事務局への問い合わせ先）</a></p>
 				</form>
 
 				<?php if ($show_reset) : ?>
@@ -102,13 +105,14 @@ $forgot_url = home_url('/' . LFT_MEMBERSHIP_SLUG . '/forgot/');
 					</p>
 				<?php endif; ?>
 			<?php endif; ?>
-
-			<p class="lft-login-links">
-				<a href="<?php echo esc_url($forgot_url); ?>">パスワードを忘れた方はこちら</a>
-			</p>
-			<p class="lft-login-links">
-				<a href="<?php echo esc_url( home_url( '/' ) ); ?>">トップページへ戻る</a>
-			</p>
+			<div class="lft-login-links-wrap">
+				<p class="lft-login-links">
+					<a href="<?php echo esc_url($forgot_url); ?>">パスワードを忘れた方はこちら</a>
+				</p>
+				<p class="lft-login-links">
+					<a href="<?php echo esc_url(home_url('/')); ?>">トップページへ戻る</a>
+				</p>
+			</div>
 		</div>
 	</div>
 	<?php wp_footer(); ?>

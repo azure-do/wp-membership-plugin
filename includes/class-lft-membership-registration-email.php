@@ -40,14 +40,15 @@ class LFT_Membership_Registration_Email {
 		$body = self::build_body( $display_name, $email, $register_url, $valid_days );
 		$body = apply_filters( 'lft_membership_registration_invite_body', $body, $display_name, $email, $register_url, $valid_days );
 
-		$headers = array( 'Content-Type: text/plain; charset=UTF-8' );
-		$bcc     = apply_filters( 'lft_membership_mail_bcc', 'seminar@s-legalestate.com', 'registration_invite', $email );
+		$extra_headers = array();
+		$bcc           = apply_filters( 'lft_membership_mail_bcc', 'seminar@s-legalestate.com', 'registration_invite', $email );
 		if ( is_string( $bcc ) && '' !== trim( $bcc ) ) {
 			$bcc = sanitize_email( trim( $bcc ) );
 			if ( is_email( $bcc ) && strtolower( $bcc ) !== strtolower( $email ) ) {
-				$headers[] = 'Bcc: ' . $bcc;
+				$extra_headers[] = 'Bcc: ' . $bcc;
 			}
 		}
+		$headers = LFT_Membership_Frontend::get_plugin_mail_headers( $extra_headers );
 		return wp_mail( $email, $subject, $body, $headers );
 	}
 

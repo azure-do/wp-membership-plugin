@@ -280,8 +280,13 @@ class LFT_Membership_DB
 	public static function get_members_expiring_tomorrow()
 	{
 		global $wpdb;
-		$table    = self::get_table_name();
-		$tomorrow = gmdate('Y-m-d', strtotime(current_time('Y-m-d') . ' +1 day'));
+		$table = self::get_table_name();
+		// サイトのタイムゾーンで「明日」の日付（deadline は date 型 Y-m-d で保存）
+		if (function_exists('wp_timezone')) {
+			$tomorrow = (new DateTimeImmutable('now', wp_timezone()))->modify('+1 day')->format('Y-m-d');
+		} else {
+			$tomorrow = gmdate('Y-m-d', strtotime(current_time('Y-m-d') . ' +1 day'));
+		}
 
 		$stale_processing_time = gmdate('Y-m-d H:i:s', strtotime(current_time('mysql') . ' -15 minutes'));
 

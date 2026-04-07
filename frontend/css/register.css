@@ -220,6 +220,28 @@ body.lft-membership-register-page {
   margin: 20px 0 0;
 }
 
+.lft-login-id-forgot {
+  margin: 14px 0 0;
+  font-size: 13px;
+  line-height: 1.55;
+  text-align: center;
+}
+
+.lft-login-id-forgot a {
+  color: #2271b1;
+  text-decoration: underline;
+  underline-offset: 12px;
+}
+
+.lft-login-id-forgot a:hover {
+  color: #135e96;
+}
+
+.lft-login-links-wrap {
+  display: flex;
+  justify-content: center;
+  gap: 40px;
+}
 .lft-login-links {
 	display: flex;
 	justify-content: center;

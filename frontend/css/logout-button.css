@@ -86,6 +86,14 @@
   margin-bottom: 18px;
 }
 
+.lft-membership-mypage-modal__field-label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #374151;
+}
+
 .lft-membership-mypage-modal__field label {
   display: block;
   margin-bottom: 8px;
@@ -102,11 +110,108 @@
   font-size: 15px;
 }
 
+.lft-membership-mypage-modal__sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.lft-membership-mypage-modal__value-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+}
+
+.lft-membership-mypage-modal__value {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 10px 12px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  font-size: 15px;
+  color: #111827;
+  word-break: break-all;
+}
+
+.lft-membership-mypage-modal__change {
+  flex: 0 0 auto;
+  padding: 8px 14px;
+  border: 1px solid #374151;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  color: #111827;
+  cursor: pointer;
+}
+
+.lft-membership-mypage-modal__change:hover,
+.lft-membership-mypage-modal__change:focus {
+  background: #f3f4f6;
+}
+
+.lft-membership-mypage-modal__change--link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 8px 14px;
+  text-decoration: none;
+}
+
+.lft-membership-mypage-modal__email-edit {
+  margin-top: 12px;
+}
+
+.lft-membership-mypage-modal__edit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.lft-membership-mypage-modal__cancel-edit {
+  padding: 8px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+}
+
+.lft-membership-mypage-modal__cancel-edit:hover {
+  background: #f9fafb;
+}
+
 .lft-membership-mypage-modal__summary {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
-  margin-bottom: 14px;
+  margin-bottom: 18px;
+}
+
+.lft-membership-mypage-modal__summary--single {
+  grid-template-columns: 1fr;
+}
+
+.lft-membership-mypage-modal__value--clickable {
+  cursor: pointer;
+}
+
+.lft-membership-mypage-modal__value--clickable:hover,
+.lft-membership-mypage-modal__value--clickable:focus {
+  outline: 2px solid #111827;
+  outline-offset: 2px;
 }
 
 .lft-membership-mypage-modal__summary div {
@@ -155,6 +260,11 @@
   gap: 10px;
 }
 
+.lft-membership-mypage-modal__actions--footer {
+  margin-top: 8px;
+  justify-content: flex-start;
+}
+
 .lft-membership-mypage-modal__save,
 .lft-membership-mypage-modal__logout {
   display: inline-flex;
@@ -166,6 +276,10 @@
   font-size: 14px;
   font-weight: 700;
   text-decoration: none;
+}
+
+.lft-membership-mypage-modal__email-edit .lft-membership-mypage-modal__save {
+  flex: 0 1 auto;
 }
 
 .lft-membership-mypage-modal__save {
@@ -184,7 +298,7 @@
 .lft-membership-mypage-modal__logout {
   border: 1px solid #b10909;
   color: #b10909;
-	underline: none !important;
+  text-decoration: none !important;
 }
 
 .lft-membership-mypage-modal__logout:hover,
@@ -192,7 +306,7 @@
   background: #8f0505;
   border-color: #8f0505;
   color: #ffffff;
-	underline: none !important;
+  text-decoration: none !important;
 }
 
 @media (max-width: 782px) {
