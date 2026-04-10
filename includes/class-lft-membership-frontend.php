@@ -201,6 +201,46 @@ class LFT_Membership_Frontend
 	}
 
 	/**
+	 * LFT会員システムの対象となるコンテンツか（パーマリンクが /{lft_membership_slug}/ 配下）
+	 * 一般向けパスワード保護ページ（seminar 等）は false を返し、WP 標準の挙動のままにする。
+	 *
+	 * @param WP_Post|int|null $post Post object, ID, or null（null のときメインクエリの投稿を参照）
+	 * @return bool
+	 */
+	private function is_lft_membership_url_scope_post($post = null)
+	{
+		if (null === $post) {
+			if (! is_singular()) {
+				return false;
+			}
+			$post = get_queried_object();
+		} elseif (is_numeric($post)) {
+			$post = get_post((int) $post);
+		}
+		if (! $post instanceof WP_Post) {
+			return false;
+		}
+		$permalink = get_permalink($post);
+		if (! $permalink) {
+			return false;
+		}
+		$path = wp_parse_url($permalink, PHP_URL_PATH);
+		if (! is_string($path) || '' === $path) {
+			return false;
+		}
+		$home_path = wp_parse_url(home_url('/'), PHP_URL_PATH);
+		$home_path = is_string($home_path) ? rtrim($home_path, '/') : '';
+		if ('' !== $home_path && strpos($path, $home_path) === 0) {
+			$rel = trim(substr($path, strlen($home_path)), '/');
+		} else {
+			$rel = trim($path, '/');
+		}
+		$prefix = $this->slug;
+		$in_scope = ($rel === $prefix) || (strpos($rel, $prefix . '/') === 0);
+		return (bool) apply_filters('lft_membership_is_url_scope_post', $in_scope, $post, $rel);
+	}
+
+	/**
 	 * 会員期限の前日通知を送信（1会員につき1回）
 	 */
 	public function maybe_send_expiration_reminders()
@@ -312,8 +352,8 @@ class LFT_Membership_Frontend
 	}
 
 	/**
-	 * 会員専用（パスワード保護）ページでは、未ログイン時はログインページへリダイレクト
-	 * 認証はプラグインの会員DB＋Cookie のみ使用（WP ユーザーではログインしない）
+	 * /{lft_membership_slug}/ 配下のパスワード保護ページのみ：未ログイン時は LFT ログインへリダイレクト
+	 * それ以外のパスワード保護ページは WordPress 標準のまま。
 	 */
 	public function redirect_protected_page_to_login()
 	{
@@ -322,6 +362,9 @@ class LFT_Membership_Frontend
 		}
 		$post = get_queried_object();
 		if (! $post || ! post_password_required($post)) {
+			return;
+		}
+		if (! $this->is_lft_membership_url_scope_post($post)) {
 			return;
 		}
 		$member = $this->get_current_lft_member();
@@ -368,6 +411,9 @@ class LFT_Membership_Frontend
 		if (! $required || ! $post) {
 			return $required;
 		}
+		if (! $this->is_lft_membership_url_scope_post($post)) {
+			return $required;
+		}
 		$member = $this->get_current_lft_member();
 		if ($member && LFT_Membership_DB::is_member_active($member)) {
 			return false;
@@ -380,6 +426,13 @@ class LFT_Membership_Frontend
 	 */
 	public function filter_the_password_form($output)
 	{
+		if (! is_singular()) {
+			return $output;
+		}
+		$post = get_queried_object();
+		if (! $post instanceof WP_Post || ! $this->is_lft_membership_url_scope_post($post)) {
+			return $output;
+		}
 		$redirect_to = get_permalink();
 		if (! $redirect_to) {
 			$redirect_to = home_url('/');
@@ -401,6 +454,13 @@ class LFT_Membership_Frontend
 		if (! is_singular()) {
 			return;
 		}
+		$post = get_queried_object();
+		if (! $post instanceof WP_Post || ! $this->is_lft_membership_url_scope_post($post)) {
+			return;
+		}
+		if ('' === (string) $post->post_password) {
+			return;
+		}
 		wp_enqueue_style(
 			'lft-membership-password-form',
 			LFT_MEMBERSHIP_PLUGIN_URL . 'frontend/css/password-form.css',
@@ -410,12 +470,55 @@ class LFT_Membership_Frontend
 	}
 
 	/**
+	 * マイページ固定ボタンを出す画面か（会員専用＝パスワード保護の singular、または /lft_membership/edit/）
+	 * トップや一般ページでは表示しない。
+	 *
+	 * @return bool
+	 */
+	private function should_show_mypage_button()
+	{
+		if (is_admin()) {
+			return false;
+		}
+		$qv = get_query_var('lft_membership');
+		if ($qv === 'edit') {
+			return (bool) apply_filters('lft_membership_show_mypage_button', true, null);
+		}
+		if (! empty($_SERVER['REQUEST_URI'])) {
+			$path = wp_unslash($_SERVER['REQUEST_URI']);
+			$path = preg_replace('#\?.*$#', '', $path);
+			$path = trim($path, '/');
+			$seg  = $this->slug . '/edit';
+			if ($path === $seg || $path === $seg . '/' || strpos($path, $seg . '/') === 0) {
+				return (bool) apply_filters('lft_membership_show_mypage_button', true, null);
+			}
+		}
+		if (! is_singular()) {
+			return false;
+		}
+		$post = get_queried_object();
+		if (! $post instanceof WP_Post) {
+			return false;
+		}
+		if (! $this->is_lft_membership_url_scope_post($post)) {
+			return false;
+		}
+		if ('' === (string) $post->post_password) {
+			return false;
+		}
+		return (bool) apply_filters('lft_membership_show_mypage_button', true, $post);
+	}
+
+	/**
 	 * 固定ログアウトボタン用のCSSを読み込み（会員ログイン時のみ・ヘッダー/フッターに依存しない）
 	 */
 	public function enqueue_logout_button_assets()
 	{
 		$member = $this->get_current_lft_member();
 		if (! $member) {
+			return;
+		}
+		if (! $this->should_show_mypage_button()) {
 			return;
 		}
 		wp_enqueue_style(
@@ -439,8 +542,11 @@ class LFT_Membership_Frontend
 		if (! $member) {
 			return;
 		}
+		if (! $this->should_show_mypage_button()) {
+			return;
+		}
 		$logout_url = home_url('/' . $this->slug . '/logout/');
-		$confirm_message = __('確認メールを現在のメールアドレスに送信しました。メール内のURLをクリックすると変更が完了します。', 'lft-membership');
+		$confirm_message = __('ご本人確認用のメールを「変更前（現在）」のメールアドレス宛に送信しました。メール内のURLをクリックすると、新しいメールアドレスへの変更が確定します。', 'lft-membership');
 		$started_date = $this->format_member_date($member->payment_date, '—');
 		$ajax_url = add_query_arg('lft_membership', 'request_email_change', home_url('/'));
 		$nonce = wp_create_nonce('lft_membership_my_page');
@@ -458,10 +564,10 @@ class LFT_Membership_Frontend
 					saveLabel: <?php echo wp_json_encode(__('保存する', 'lft-membership')); ?>,
 					cancelLabel: <?php echo wp_json_encode(__('閉じる', 'lft-membership')); ?>,
 					cancelEditLabel: <?php echo wp_json_encode(__('キャンセル', 'lft-membership')); ?>,
+					changeBtnLabel: <?php echo wp_json_encode(__('変更する', 'lft-membership')); ?>,
 					logoutLabel: <?php echo wp_json_encode(__('ログアウト', 'lft-membership')); ?>,
 					confirmMessage: <?php echo wp_json_encode($confirm_message); ?>,
 					errorMessage: <?php echo wp_json_encode(__('保存に失敗しました。もう一度お試しください。', 'lft-membership')); ?>,
-					emailEditHint: <?php echo wp_json_encode(__('クリックして変更', 'lft-membership')); ?>,
 					labels: {
 						mailLoginId: <?php echo wp_json_encode(__('メールアドレス（ログインID）', 'lft-membership')); ?>,
 						startedDate: <?php echo wp_json_encode(__('加入年月日（開始日）', 'lft-membership')); ?>
@@ -505,11 +611,13 @@ class LFT_Membership_Frontend
 
 				function setEmailEditMode(editing) {
 					var display = document.getElementById('lft-membership-mypage-email-display');
+					var btnChange = document.getElementById('lft-membership-mypage-email-change');
 					var editWrap = document.getElementById('lft-membership-mypage-email-edit');
 					var input = document.getElementById('lft-membership-mypage-email');
 					if (!display || !editWrap) return;
 					if (editing) {
 						display.setAttribute('hidden', 'hidden');
+						if (btnChange) btnChange.setAttribute('hidden', 'hidden');
 						editWrap.removeAttribute('hidden');
 						if (input) {
 							input.value = myPageData.email;
@@ -517,6 +625,7 @@ class LFT_Membership_Frontend
 						}
 					} else {
 						display.removeAttribute('hidden');
+						if (btnChange) btnChange.removeAttribute('hidden');
 						editWrap.setAttribute('hidden', 'hidden');
 						if (input) input.value = myPageData.email;
 					}
@@ -614,7 +723,8 @@ class LFT_Membership_Frontend
 							'<div class="lft-membership-mypage-modal__field">' +
 								'<span class="lft-membership-mypage-modal__field-label">' + myPageData.labels.mailLoginId + '</span>' +
 								'<div class="lft-membership-mypage-modal__value-row">' +
-									'<span id="lft-membership-mypage-email-display" class="lft-membership-mypage-modal__value lft-membership-mypage-modal__value--clickable" role="button" tabindex="0" title="' + myPageData.emailEditHint + '"></span>' +
+									'<span id="lft-membership-mypage-email-display" class="lft-membership-mypage-modal__value lft-membership-mypage-modal__value--readonly"></span>' +
+									'<button type="button" id="lft-membership-mypage-email-change" class="lft-membership-mypage-modal__change">' + myPageData.changeBtnLabel + '</button>' +
 								'</div>' +
 								'<div id="lft-membership-mypage-email-edit" class="lft-membership-mypage-modal__email-edit" hidden>' +
 									'<label class="lft-membership-mypage-modal__sr-only" for="lft-membership-mypage-email">' + myPageData.labels.mailLoginId + '</label>' +
@@ -645,15 +755,9 @@ class LFT_Membership_Frontend
 							closeModal();
 						}
 					});
-					var emailDisplay = document.getElementById('lft-membership-mypage-email-display');
-					if (emailDisplay) {
-						emailDisplay.addEventListener('click', function() { setEmailEditMode(true); });
-						emailDisplay.addEventListener('keydown', function(ev) {
-							if (ev.key === 'Enter' || ev.key === ' ') {
-								ev.preventDefault();
-								setEmailEditMode(true);
-							}
-						});
+					var btnEmailChange = document.getElementById('lft-membership-mypage-email-change');
+					if (btnEmailChange) {
+						btnEmailChange.addEventListener('click', function() { setEmailEditMode(true); });
 					}
 					var btnEmailCancel = document.getElementById('lft-membership-mypage-email-cancel');
 					if (btnEmailCancel) {
@@ -1178,8 +1282,7 @@ LFT事務局でございます。
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 株式会社リーガルエステート
 Tel             045-620-2240
-Email(共通）　  info@s-legalestate.com
-Email(セミナー）seminar@s-legalestate.com
+Email（事務局）　seminar@s-legalestate.com
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 MAIL;
 	}
@@ -1303,7 +1406,7 @@ MAIL;
 		}
 
 		wp_send_json_success(array(
-			'message' => '確認メールを現在のメールアドレスに送信しました。メール内のURLをクリックすると変更が完了します。',
+			'message' => 'ご本人確認用のメールを「変更前（現在）」のメールアドレス宛に送信しました。メール内のURLをクリックすると、新しいメールアドレスへの変更が確定します。',
 		));
 	}
 
@@ -1353,7 +1456,8 @@ MAIL;
 	}
 
 	/**
-	 * 登録完了メールを送信（トークンURLで会員登録が成功したとき）
+	 * 登録完了メールを送信（トークンURLで会員登録が成功したとき＝パスワード設定完了直後）
+	 * 事務局へ seminar@s-legalestate.com を BCC（差出人と同一の場合は BCC が届かないことがあるため別送で控え）
 	 *
 	 * @param string $email 送信先メール
 	 * @param string $user_name 会員名
@@ -1363,8 +1467,7 @@ MAIL;
 		if (empty($email) || ! is_email($email)) {
 			return;
 		}
-		$site_name = wp_specialchars_decode(get_bloginfo('name'), ENT_QUOTES);
-		$display   = is_string($user_name) ? trim($user_name) : '';
+		$display = is_string($user_name) ? trim($user_name) : '';
 		if ('' === $display) {
 			$display = $email;
 		}
@@ -1383,21 +1486,42 @@ MAIL;
 			$email,
 			$member_page_url
 		);
-		$extra_headers = array();
-		$bcc_email     = apply_filters(
+		$from_email = sanitize_email(apply_filters('lft_membership_mail_from_email', 'seminar@s-legalestate.com'));
+		if (! is_email($from_email)) {
+			$from_email = 'seminar@s-legalestate.com';
+		}
+		$default_bcc = apply_filters('lft_membership_mail_bcc', 'seminar@s-legalestate.com', 'registration_confirmation', $email);
+		$bcc_raw     = apply_filters(
 			'lft_membership_registration_confirmation_bcc',
-			'seminar@s-legalestate.com',
+			$default_bcc,
 			$email,
 			$display,
 			$member_page_url
 		);
-		if (is_string($bcc_email) && '' !== trim($bcc_email)) {
-			$bcc_email = sanitize_email(trim($bcc_email));
+		$extra_headers   = array();
+		$office_bcc_send = '';
+		if (is_string($bcc_raw) && '' !== trim($bcc_raw)) {
+			$bcc_email = sanitize_email(trim($bcc_raw));
 			if (is_email($bcc_email) && strtolower($bcc_email) !== strtolower($email)) {
-				$extra_headers[] = 'Bcc: ' . $bcc_email;
+				if (strtolower($bcc_email) === strtolower($from_email)) {
+					// From と BCC が同一だと環境によって BCC が届かないため、事務局へは別送（内容は会員向けと同じ）
+					$office_bcc_send = $bcc_email;
+				} else {
+					$extra_headers[] = 'Bcc: ' . $bcc_email;
+				}
 			}
 		}
 		wp_mail($email, $subject, $body, self::get_plugin_mail_headers($extra_headers));
+		if ('' !== $office_bcc_send) {
+			$office_subject = apply_filters(
+				'lft_membership_registration_confirmation_office_copy_subject',
+				'【事務局控え】' . $subject,
+				$display,
+				$email,
+				$member_page_url
+			);
+			wp_mail($office_bcc_send, $office_subject, $body, self::get_plugin_mail_headers());
+		}
 	}
 
 	/**
@@ -1467,8 +1591,7 @@ LFTを最大限ご活用いただけるよう
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 株式会社リーガルエステート
 Tel             045-620-2240
-Email(共通）　  info@s-legalestate.com
-Email(セミナー）seminar@s-legalestate.com
+Email（事務局）　seminar@s-legalestate.com
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 MAIL;
 	}
@@ -1538,8 +1661,7 @@ LFT事務局でございます。
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 株式会社リーガルエステート
 Tel             045-620-2240
-Email(共通）　  info@s-legalestate.com
-Email(セミナー）seminar@s-legalestate.com
+Email（事務局）　seminar@s-legalestate.com
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 MAIL;
 	}
@@ -1617,8 +1739,7 @@ MAIL;
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 株式会社リーガルエステート
 Tel             045-620-2240
-Email(共通）　  info@s-legalestate.com
-Email(セミナー）seminar@s-legalestate.com
+Email（事務局）　seminar@s-legalestate.com
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 MAIL;
 	}
@@ -1723,8 +1844,7 @@ MAIL;
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 株式会社リーガルエステート
 Tel             045-620-2240
-Email(共通）　  info@s-legalestate.com
-Email(セミナー）seminar@s-legalestate.com
+Email（事務局）　seminar@s-legalestate.com
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 MAIL;
 	}
@@ -1760,8 +1880,7 @@ MAIL;
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 株式会社リーガルエステート
 Tel             045-620-2240
-Email(共通）　  info@s-legalestate.com
-Email(セミナー）seminar@s-legalestate.com
+Email（事務局）　seminar@s-legalestate.com
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 MAIL;
 	}
@@ -1776,10 +1895,10 @@ MAIL;
 	 */
 	private function notify_office_member_profile_updated($user_name, $member_email, $change_description, $bcc_seminar = true)
 	{
-		$to = apply_filters('lft_membership_office_notice_to', 'info@s-legalestate.com');
+		$to = apply_filters('lft_membership_office_notice_to', 'seminar@s-legalestate.com');
 		$to = sanitize_email($to);
 		if (! is_email($to)) {
-			$to = 'info@s-legalestate.com';
+			$to = 'seminar@s-legalestate.com';
 		}
 		$display = is_string($user_name) ? trim($user_name) : '';
 		if ('' === $display) {
@@ -1810,7 +1929,7 @@ MAIL;
 		);
 		$extra_headers = array();
 		if ($bcc_seminar) {
-			$bcc = apply_filters('lft_membership_office_notice_bcc', 'seminar@s-legalestate.com');
+			$bcc = apply_filters('lft_membership_office_notice_bcc', '');
 			if (is_string($bcc) && '' !== trim($bcc)) {
 				$bcc = sanitize_email(trim($bcc));
 				if (is_email($bcc) && strtolower($bcc) !== strtolower($to)) {

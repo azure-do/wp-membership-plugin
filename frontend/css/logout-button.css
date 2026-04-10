@@ -204,14 +204,9 @@
   grid-template-columns: 1fr;
 }
 
-.lft-membership-mypage-modal__value--clickable {
-  cursor: pointer;
-}
-
-.lft-membership-mypage-modal__value--clickable:hover,
-.lft-membership-mypage-modal__value--clickable:focus {
-  outline: 2px solid #111827;
-  outline-offset: 2px;
+.lft-membership-mypage-modal__value--readonly {
+  cursor: default;
+  user-select: text;
 }
 
 .lft-membership-mypage-modal__summary div {

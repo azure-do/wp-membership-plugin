@@ -104,8 +104,7 @@ LFT事務局（045-420-2240）へお気軽にお電話ください。
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 株式会社リーガルエステート
 Tel             045-620-2240
-Email(共通）　  info@s-legalestate.com
-Email(セミナー）seminar@s-legalestate.com
+Email（事務局）　seminar@s-legalestate.com
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 TEXT;
 	}
