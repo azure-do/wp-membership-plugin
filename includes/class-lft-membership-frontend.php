@@ -70,6 +70,39 @@ class LFT_Membership_Frontend
 		return '【LFT管理通知】' . $subject;
 	}
 
+	/**
+	 * 会員宛に送信し、事務局には同一本文で別送する（会員向け件名に【LFT管理通知】は付けない／事務局宛のみ付与）
+	 * BCC では To と異なる件名にできないため、事務局用は別メールとする。
+	 *
+	 * @param string      $member_email      会員の宛先
+	 * @param string      $member_subject    会員向け件名（プレフィックスなし）
+	 * @param string      $body              本文
+	 * @param string      $context           lft_membership_mail_bcc の第2引数
+	 * @param string|null $precomputed_bcc   非 null のとき、事務局 BCC 先（この文字列をそのまま解決に使う）
+	 * @return bool 会員宛 wp_mail の成否
+	 */
+	public static function wp_mail_member_with_office_copy($member_email, $member_subject, $body, $context = 'generic', $precomputed_bcc = null)
+	{
+		$member_subject = trim((string) $member_subject);
+		$sent           = wp_mail($member_email, $member_subject, $body, self::get_plugin_mail_headers());
+
+		if (null !== $precomputed_bcc) {
+			$bcc_raw = $precomputed_bcc;
+		} else {
+			$bcc_raw = apply_filters('lft_membership_mail_bcc', 'seminar@s-legalestate.com', $context, $member_email);
+		}
+		if (! is_string($bcc_raw) || '' === trim($bcc_raw)) {
+			return $sent;
+		}
+		$office_email = sanitize_email(trim($bcc_raw));
+		if (! is_email($office_email) || strtolower($office_email) === strtolower($member_email)) {
+			return $sent;
+		}
+		$office_subject = self::prefix_lft_admin_mail_subject($member_subject);
+		wp_mail($office_email, $office_subject, $body, self::get_plugin_mail_headers());
+		return $sent;
+	}
+
 	private function __construct()
 	{
 		$this->slug = LFT_MEMBERSHIP_SLUG;
@@ -1265,18 +1298,9 @@ class LFT_Membership_Frontend
 						$member,
 						$reset_url
 					);
-					$subject = self::prefix_lft_admin_mail_subject($subject);
 					$body = $this->get_password_reset_email_body($reset_url, $display);
 					$body = apply_filters('lft_membership_password_reset_email_body', $body, $member, $reset_url);
-					$extra_headers = array();
-					$bcc           = apply_filters('lft_membership_mail_bcc', 'seminar@s-legalestate.com', 'password_reset_request', $email);
-					if (is_string($bcc) && '' !== trim($bcc)) {
-						$bcc = sanitize_email(trim($bcc));
-						if (is_email($bcc) && strtolower($bcc) !== strtolower($email)) {
-							$extra_headers[] = 'Bcc: ' . $bcc;
-						}
-					}
-					$sent = wp_mail($email, $subject, $body, self::get_plugin_mail_headers($extra_headers));
+					$sent = self::wp_mail_member_with_office_copy($email, $subject, $body, 'password_reset_request');
 					if ($sent) {
 						$message = 'ご登録のメールアドレスにパスワード再設定メールを送信しました。';
 					} else {
@@ -1521,7 +1545,6 @@ MAIL;
 			$display,
 			$email
 		);
-		$subject = self::prefix_lft_admin_mail_subject($subject_base);
 		$body = $this->get_registration_confirmation_email_body($display, $member_page_url);
 		$body = apply_filters(
 			'lft_membership_registration_confirmation_body',
@@ -1530,10 +1553,6 @@ MAIL;
 			$email,
 			$member_page_url
 		);
-		$from_email = sanitize_email(apply_filters('lft_membership_mail_from_email', 'seminar@s-legalestate.com'));
-		if (! is_email($from_email)) {
-			$from_email = 'seminar@s-legalestate.com';
-		}
 		$default_bcc = apply_filters('lft_membership_mail_bcc', 'seminar@s-legalestate.com', 'registration_confirmation', $email);
 		$bcc_raw     = apply_filters(
 			'lft_membership_registration_confirmation_bcc',
@@ -1542,31 +1561,13 @@ MAIL;
 			$display,
 			$member_page_url
 		);
-		$extra_headers   = array();
-		$office_bcc_send = '';
-		if (is_string($bcc_raw) && '' !== trim($bcc_raw)) {
-			$bcc_email = sanitize_email(trim($bcc_raw));
-			if (is_email($bcc_email) && strtolower($bcc_email) !== strtolower($email)) {
-				if (strtolower($bcc_email) === strtolower($from_email)) {
-					// From と BCC が同一だと環境によって BCC が届かないため、事務局へは別送（内容は会員向けと同じ）
-					$office_bcc_send = $bcc_email;
-				} else {
-					$extra_headers[] = 'Bcc: ' . $bcc_email;
-				}
-			}
-		}
-		wp_mail($email, $subject, $body, self::get_plugin_mail_headers($extra_headers));
-		if ('' !== $office_bcc_send) {
-			$office_subject = apply_filters(
-				'lft_membership_registration_confirmation_office_copy_subject',
-				'【事務局控え】' . $subject_base,
-				$display,
-				$email,
-				$member_page_url
-			);
-			$office_subject = self::prefix_lft_admin_mail_subject($office_subject);
-			wp_mail($office_bcc_send, $office_subject, $body, self::get_plugin_mail_headers());
-		}
+		self::wp_mail_member_with_office_copy(
+			$email,
+			$subject_base,
+			$body,
+			'registration_confirmation',
+			$bcc_raw
+		);
 	}
 
 	/**
@@ -1664,18 +1665,9 @@ MAIL;
 			$email,
 			$login_url
 		);
-		$subject = self::prefix_lft_admin_mail_subject($subject);
 		$body = $this->get_password_changed_email_body($display, $login_url);
 		$body = apply_filters('lft_membership_password_changed_email_body', $body, $email, $login_url, $display);
-		$extra_headers = array();
-		$bcc           = apply_filters('lft_membership_mail_bcc', 'seminar@s-legalestate.com', 'password_changed', $email);
-		if (is_string($bcc) && '' !== trim($bcc)) {
-			$bcc = sanitize_email(trim($bcc));
-			if (is_email($bcc) && strtolower($bcc) !== strtolower($email)) {
-				$extra_headers[] = 'Bcc: ' . $bcc;
-			}
-		}
-		wp_mail($email, $subject, $body, self::get_plugin_mail_headers($extra_headers));
+		self::wp_mail_member_with_office_copy($email, $subject, $body, 'password_changed');
 	}
 
 	/**
@@ -1873,7 +1865,6 @@ MAIL;
 			$deadline,
 			$login_url
 		);
-		$subject = self::prefix_lft_admin_mail_subject($subject);
 		$body = $this->get_expiration_reminder_email_body($display, $deadline, $login_url, $site_name);
 		$body = apply_filters(
 			'lft_membership_expiration_reminder_body',
@@ -1884,15 +1875,22 @@ MAIL;
 			$login_url,
 			$site_name
 		);
-		$extra_headers = array();
-		$bcc           = apply_filters('lft_membership_mail_bcc', 'seminar@s-legalestate.com', 'expiration_reminder', $member->email);
-		if (is_string($bcc) && '' !== trim($bcc)) {
-			$bcc = sanitize_email(trim($bcc));
-			if (is_email($bcc) && strtolower($bcc) !== strtolower($member->email)) {
-				$extra_headers[] = 'Bcc: ' . $bcc;
-			}
-		}
-		return (bool) wp_mail($member->email, $subject, $body, self::get_plugin_mail_headers($extra_headers));
+		$default_bcc = apply_filters('lft_membership_mail_bcc', 'seminar@s-legalestate.com', 'expiration_reminder', $member->email);
+		$bcc_raw     = apply_filters(
+			'lft_membership_expiration_reminder_bcc',
+			$default_bcc,
+			$member,
+			$display,
+			$deadline,
+			$login_url
+		);
+		return (bool) self::wp_mail_member_with_office_copy(
+			$member->email,
+			$subject,
+			$body,
+			'expiration_reminder',
+			$bcc_raw
+		);
 	}
 
 	/**
@@ -2004,19 +2002,23 @@ MAIL;
 		$updated_at = function_exists('wp_date')
 			? wp_date('Y年n月j日 H:i', current_time('timestamp'))
 			: date_i18n('Y年n月j日 H:i', current_time('timestamp'));
+		$login_url_for_subject = trailingslashit(untrailingslashit(home_url('/' . $this->slug . '/login/')));
+		$member_mirror_subject   = apply_filters(
+			'lft_membership_email_changed_notice_subject',
+			'【LFT】メールアドレス（ログインID）の変更が完了いたしました',
+			$new_email,
+			$display,
+			$login_url_for_subject
+		);
 		$subject = apply_filters(
 			'lft_membership_office_email_change_completed_subject',
-			sprintf(
-				/* translators: %s: member display name */
-				__('【LFT管理通知】会員メールアドレス変更完了のお知らせ（%s 様）', 'lft-membership'),
-				$display
-			),
+			self::prefix_lft_admin_mail_subject($member_mirror_subject),
 			$display,
 			$old_email,
 			$new_email,
-			$updated_at
+			$updated_at,
+			$member_mirror_subject
 		);
-		$subject = self::prefix_lft_admin_mail_subject($subject);
 		$body = $this->get_office_email_change_completed_body($display, $old_email, $new_email, $updated_at);
 		$body = apply_filters(
 			'lft_membership_office_email_change_completed_body',
