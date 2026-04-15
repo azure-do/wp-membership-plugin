@@ -36,6 +36,7 @@ class LFT_Membership_Registration_Email {
 			$email,
 			$register_url
 		);
+		$subject = LFT_Membership_Frontend::prefix_lft_admin_mail_subject( $subject );
 
 		$body = self::build_body( $display_name, $email, $register_url, $valid_days );
 		$body = apply_filters( 'lft_membership_registration_invite_body', $body, $display_name, $email, $register_url, $valid_days );

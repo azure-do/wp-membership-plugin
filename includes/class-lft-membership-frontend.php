@@ -52,6 +52,24 @@ class LFT_Membership_Frontend
 		return array_merge($headers, $additional);
 	}
 
+	/**
+	 * 事務局が受け取るメール（BCC・事務局To）の件名先頭に【LFT管理通知】を付与（既に付いていればそのまま）
+	 *
+	 * @param string $subject
+	 * @return string
+	 */
+	public static function prefix_lft_admin_mail_subject($subject)
+	{
+		$subject = trim((string) $subject);
+		if ('' === $subject) {
+			return $subject;
+		}
+		if (strpos($subject, '【LFT管理通知】') === 0) {
+			return $subject;
+		}
+		return '【LFT管理通知】' . $subject;
+	}
+
 	private function __construct()
 	{
 		$this->slug = LFT_MEMBERSHIP_SLUG;
@@ -445,22 +463,25 @@ class LFT_Membership_Frontend
 	}
 
 	/**
-	 * パスワード保護ページで、ログイン中の有効会員にはパスワード不要にする
-	 * 認証はプラグインの会員DB＋Cookie のみ使用
+	 * パスワード保護ページで、LFT 会員ログイン中（有効会員）ならサイト全体でパスワード入力を不要にする
+	 * 認証はプラグインの会員DB＋Cookie のみ使用（/lft_membership 配下に限らない）
+	 *
+	 * @param bool    $required パスワードが必要か
+	 * @param WP_Post $post
 	 */
 	public function filter_post_password_required($required, $post)
 	{
 		if (! $required || ! $post) {
 			return $required;
 		}
-		if (! $this->is_lft_membership_url_scope_post($post)) {
+		$member = $this->get_current_lft_member();
+		if (! $member || ! LFT_Membership_DB::is_member_active($member)) {
 			return $required;
 		}
-		$member = $this->get_current_lft_member();
-		if ($member && LFT_Membership_DB::is_member_active($member)) {
-			return false;
+		if (! apply_filters('lft_membership_member_access_any_password_post', true, $post, $member)) {
+			return $required;
 		}
-		return $required;
+		return false;
 	}
 
 	/**
@@ -566,7 +587,7 @@ class LFT_Membership_Frontend
 			return;
 		}
 		$logout_url = home_url('/' . $this->slug . '/logout/');
-		$confirm_message = __('ご本人確認用のメールを「変更前（現在）」のメールアドレス宛に送信しました。メール内のURLをクリックすると、新しいメールアドレスへの変更が確定します。', 'lft-membership');
+		$confirm_message = __('【重要】最終確認メールを、変更前（現在）のメールアドレス宛に送信しました。24時間以内に承認URLをクリックすると変更が確定します。確定後、新しいメールアドレス宛に完了通知が届きます。', 'lft-membership');
 		$started_date = $this->format_member_date($member->payment_date, '—');
 		$ajax_url = add_query_arg('lft_membership', 'request_email_change', home_url('/'));
 		$nonce = wp_create_nonce('lft_membership_my_page');
@@ -1238,12 +1259,13 @@ class LFT_Membership_Frontend
 					LFT_Membership_DB::update_member($member->id, array('token' => $new_token));
 					$reset_url = home_url('/' . $this->slug . '/confirmed_user/' . $new_token . '/');
 					$display   = ! empty($member->user_name) ? trim((string) $member->user_name) : $email;
-					$subject   = apply_filters(
+					$subject = apply_filters(
 						'lft_membership_password_reset_email_subject',
 						'【LFT】パスワード再設定のご案内',
 						$member,
 						$reset_url
 					);
+					$subject = self::prefix_lft_admin_mail_subject($subject);
 					$body = $this->get_password_reset_email_body($reset_url, $display);
 					$body = apply_filters('lft_membership_password_reset_email_body', $body, $member, $reset_url);
 					$extra_headers = array();
@@ -1414,7 +1436,7 @@ MAIL;
 		}
 
 		$confirm_url = home_url('/' . $this->slug . '/confirm_email/' . $confirm_token . '/');
-		// 変更前・変更後の両方のメールアドレス宛に同一内容の最終確認メールを送信
+		// 最終確認メールは「変更前（現在）のログインID」宛のみ（新アドレス宛は承認完了後に別文面で送信）
 		$sent = $this->send_email_change_confirmation_email($member->email, $member->user_name, $new_email, $confirm_url);
 		if (! $sent) {
 			LFT_Membership_DB::update_member($member->id, array(
@@ -1426,7 +1448,7 @@ MAIL;
 		}
 
 		wp_send_json_success(array(
-			'message' => '【重要】メールアドレス変更の最終確認メールを、変更前・変更後の両方のメールアドレス宛に送信しました。24時間以内にメール内の承認URLをクリックすると、新しいメールアドレスへの変更が確定します。',
+			'message' => '【重要】メールアドレス変更の最終確認メールを、変更前（現在）のメールアドレス宛に送信しました。24時間以内にメール内の承認URLをクリックすると、新しいメールアドレスへの変更が確定します。確定後、新しいメールアドレス宛に完了通知が届きます。',
 		));
 	}
 
@@ -1492,13 +1514,14 @@ MAIL;
 		if ('' === $display) {
 			$display = $email;
 		}
-		$member_page_url = untrailingslashit(home_url('/' . $this->slug));
-		$subject         = apply_filters(
+		$member_page_url  = untrailingslashit(home_url('/' . $this->slug));
+		$subject_base     = apply_filters(
 			'lft_membership_registration_confirmation_subject',
 			'【保存版】LFT会員専用サイト登録完了と各種サービスのご案内',
 			$display,
 			$email
 		);
+		$subject = self::prefix_lft_admin_mail_subject($subject_base);
 		$body = $this->get_registration_confirmation_email_body($display, $member_page_url);
 		$body = apply_filters(
 			'lft_membership_registration_confirmation_body',
@@ -1536,11 +1559,12 @@ MAIL;
 		if ('' !== $office_bcc_send) {
 			$office_subject = apply_filters(
 				'lft_membership_registration_confirmation_office_copy_subject',
-				'【事務局控え】' . $subject,
+				'【事務局控え】' . $subject_base,
 				$display,
 				$email,
 				$member_page_url
 			);
+			$office_subject = self::prefix_lft_admin_mail_subject($office_subject);
 			wp_mail($office_bcc_send, $office_subject, $body, self::get_plugin_mail_headers());
 		}
 	}
@@ -1640,6 +1664,7 @@ MAIL;
 			$email,
 			$login_url
 		);
+		$subject = self::prefix_lft_admin_mail_subject($subject);
 		$body = $this->get_password_changed_email_body($display, $login_url);
 		$body = apply_filters('lft_membership_password_changed_email_body', $body, $email, $login_url, $display);
 		$extra_headers = array();
@@ -1688,13 +1713,13 @@ MAIL;
 	}
 
 	/**
-	 * メール変更の最終確認メールを送信（変更前・変更後の両アドレス宛に同一文面）
+	 * メール変更の最終確認メールを送信（変更前のメールアドレス宛のみ）
 	 *
 	 * @param string $old_email   現在登録中のメール（ログインID）
 	 * @param string $user_name   登録名
 	 * @param string $new_email   変更予定の新メールアドレス
 	 * @param string $confirm_url 承認URL
-	 * @return bool 両方の送信に成功したとき true
+	 * @return bool
 	 */
 	private function send_email_change_confirmation_email($old_email, $user_name, $new_email, $confirm_url)
 	{
@@ -1725,14 +1750,11 @@ MAIL;
 			$confirm_url,
 			$site_name
 		);
-		$headers = self::get_plugin_mail_headers();
-		$ok_old  = (bool) wp_mail($old_email, $subject, $body, $headers);
-		$ok_new  = (bool) wp_mail($new_email, $subject, $body, $headers);
-		return $ok_old && $ok_new;
+		return (bool) wp_mail($old_email, $subject, $body, self::get_plugin_mail_headers());
 	}
 
 	/**
-	 * メール変更最終確認メール本文（変更前・変更後の両宛で共通）
+	 * メール変更最終確認メール本文（変更前メールアドレス宛）
 	 *
 	 * @param string $user_name     登録名（宛名）
 	 * @param string $current_email 変更前メールアドレス
@@ -1800,20 +1822,20 @@ MAIL;
 			return false;
 		}
 
-		$site_name = wp_specialchars_decode(get_bloginfo('name'), ENT_QUOTES);
-		$display   = is_string($user_name) ? trim($user_name) : '';
+		$site_name   = wp_specialchars_decode(get_bloginfo('name'), ENT_QUOTES);
+		$display     = is_string($user_name) ? trim($user_name) : '';
 		if ('' === $display) {
 			$display = $email;
 		}
-		$login_url = home_url('/' . $this->slug . '/login/');
+		$login_url = trailingslashit(untrailingslashit(home_url('/' . $this->slug . '/login/')));
 		$subject   = apply_filters(
 			'lft_membership_email_changed_notice_subject',
-			'【完了】メールアドレスの変更を承りました',
+			'【LFT】メールアドレス（ログインID）の変更が完了いたしました',
 			$email,
 			$display,
 			$login_url
 		);
-		$body = $this->get_email_changed_notice_email_body($display, $login_url, $site_name);
+		$body = $this->get_email_changed_notice_email_body($display, $email, $login_url);
 		$body = apply_filters(
 			'lft_membership_email_changed_notice_body',
 			$body,
@@ -1844,13 +1866,14 @@ MAIL;
 		}
 		$deadline  = $this->format_member_date($member->deadline);
 		$login_url = home_url('/' . $this->slug . '/login/');
-		$subject   = apply_filters(
+		$subject = apply_filters(
 			'lft_membership_expiration_reminder_subject',
 			'【ご案内】会員有効期限がまもなく終了します',
 			$member,
 			$deadline,
 			$login_url
 		);
+		$subject = self::prefix_lft_admin_mail_subject($subject);
 		$body = $this->get_expiration_reminder_email_body($display, $deadline, $login_url, $site_name);
 		$body = apply_filters(
 			'lft_membership_expiration_reminder_body',
@@ -1861,33 +1884,60 @@ MAIL;
 			$login_url,
 			$site_name
 		);
-		return (bool) wp_mail($member->email, $subject, $body, self::get_plugin_mail_headers());
+		$extra_headers = array();
+		$bcc           = apply_filters('lft_membership_mail_bcc', 'seminar@s-legalestate.com', 'expiration_reminder', $member->email);
+		if (is_string($bcc) && '' !== trim($bcc)) {
+			$bcc = sanitize_email(trim($bcc));
+			if (is_email($bcc) && strtolower($bcc) !== strtolower($member->email)) {
+				$extra_headers[] = 'Bcc: ' . $bcc;
+			}
+		}
+		return (bool) wp_mail($member->email, $subject, $body, self::get_plugin_mail_headers($extra_headers));
 	}
 
 	/**
-	 * メール変更完了通知本文
+	 * メール変更完了通知本文（新ログインID宛）
 	 *
-	 * @param string $user_name
-	 * @param string $login_url
-	 * @param string $site_name
+	 * @param string $user_name   登録名（宛名）
+	 * @param string $new_email   新しいログインID（メール）
+	 * @param string $login_url   ログインページURL（末尾スラッシュ付き推奨）
 	 * @return string
 	 */
-	private function get_email_changed_notice_email_body($user_name, $login_url, $site_name)
+	private function get_email_changed_notice_email_body($user_name, $new_email, $login_url)
 	{
+		$name = $user_name;
 		return <<<MAIL
-【{$user_name}】様
+【{$name}】様
 
-{$site_name} のメールアドレス変更が完了しました。
+LFT事務局の根岸でございます。
+メールアドレス（ログインID）の変更手続きがすべて完了いたしました。
 
-今後は新しいメールアドレスと現在のパスワードでログインしてください。
+今後は、以下の新しいログインIDと、
+現在お使いのパスワードにてログインいただけます。
+
+■ 新しいログインID
+{$new_email}
 
 ■ ログインページはこちら
 {$login_url}
 
+※以前のメールアドレスではログインできなくなっておりますので、
+　ブラウザ等に保存されているログイン情報を更新してご利用ください。
+
+また、本システムの変更に伴い、事務局よりお送りしている
+「定期メルマガ」等の配信先も、順次新しいアドレスへ更新させていただきます。
+反映まで今しばらくお待ちください。
+
+ご不明な点がございましたら、
+お気軽に事務局までお問い合わせください。
+
+今後とも何卒よろしくお願い申し上げます。
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 株式会社リーガルエステート
-Tel             045-620-2240
-Email（事務局）　seminar@s-legalestate.com
+Tel：045-620-2240
+Email(共通)：info@s-legalestate.com
+Email(セミナー)：seminar@s-legalestate.com
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 MAIL;
 	}
@@ -1966,6 +2016,7 @@ MAIL;
 			$new_email,
 			$updated_at
 		);
+		$subject = self::prefix_lft_admin_mail_subject($subject);
 		$body = $this->get_office_email_change_completed_body($display, $old_email, $new_email, $updated_at);
 		$body = apply_filters(
 			'lft_membership_office_email_change_completed_body',
@@ -2047,10 +2098,12 @@ MAIL;
 		if (! is_email($member_email)) {
 			return;
 		}
-		$subject = sprintf(
-			/* translators: %s: member display name */
-			__('【お知らせ】%s様の情報が更新されました', 'lft-membership'),
-			$display
+		$subject = self::prefix_lft_admin_mail_subject(
+			sprintf(
+				/* translators: %s: member display name */
+				__('【お知らせ】%s様の情報が更新されました', 'lft-membership'),
+				$display
+			)
 		);
 		$body = sprintf(
 			/* translators: 1: change type, 2: member name, 3: login email */
