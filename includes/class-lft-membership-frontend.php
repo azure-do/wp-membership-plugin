@@ -1111,9 +1111,6 @@ class LFT_Membership_Frontend
 		if (! empty($member->wp_user_id) && get_user_by('id', $member->wp_user_id)) {
 			wp_set_password($new_password, $member->wp_user_id);
 		}
-		// トークンURL（管理者発行）でパスワード変更した旨をメールで通知
-		$this->send_password_changed_email($member->email, $member->user_name);
-		$this->notify_office_member_profile_updated($member->user_name, $member->email, __('パスワード', 'lft-membership'), false);
 		wp_safe_redirect(home_url('/' . $this->slug . '/login/'));
 		exit;
 	}
@@ -1667,7 +1664,8 @@ MAIL;
 		);
 		$body = $this->get_password_changed_email_body($display, $login_url);
 		$body = apply_filters('lft_membership_password_changed_email_body', $body, $email, $login_url, $display);
-		self::wp_mail_member_with_office_copy($email, $subject, $body, 'password_changed');
+		// パスワード変更通知は会員本人のみに送信（事務局・サービス宛の控え送信は行わない）
+		wp_mail($email, $subject, $body, self::get_plugin_mail_headers());
 	}
 
 	/**
