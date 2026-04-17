@@ -86,6 +86,11 @@ class LFT_Membership_Frontend
 		$member_subject = trim((string) $member_subject);
 		$sent           = wp_mail($member_email, $member_subject, $body, self::get_plugin_mail_headers());
 
+		// パスワード再設定「依頼」メールは、事務局への控え送信を行わない（会員本人宛のみ）
+		if ($context === 'password_reset_request') {
+			return $sent;
+		}
+
 		if (null !== $precomputed_bcc) {
 			$bcc_raw = $precomputed_bcc;
 		} else {
@@ -1111,6 +1116,8 @@ class LFT_Membership_Frontend
 		if (! empty($member->wp_user_id) && get_user_by('id', $member->wp_user_id)) {
 			wp_set_password($new_password, $member->wp_user_id);
 		}
+		// パスワード変更完了メール（会員本人宛）を送信
+		$this->send_password_changed_email($member->email, $member->user_name);
 		wp_safe_redirect(home_url('/' . $this->slug . '/login/'));
 		exit;
 	}
