@@ -1297,7 +1297,8 @@ class LFT_Membership_Frontend
 					);
 					$body = $this->get_password_reset_email_body($reset_url, $display);
 					$body = apply_filters('lft_membership_password_reset_email_body', $body, $member, $reset_url);
-					$sent = self::wp_mail_member_with_office_copy($email, $subject, $body, 'password_reset_request');
+					// パスワード再設定「依頼」メールは会員本人のみに送信（事務局宛の控え送信は行わない）
+					$sent = wp_mail($email, $subject, $body, self::get_plugin_mail_headers());
 					if ($sent) {
 						$message = 'ご登録のメールアドレスにパスワード再設定メールを送信しました。';
 					} else {
