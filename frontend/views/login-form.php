@@ -42,6 +42,17 @@ $contact_url = apply_filters('lft_membership_contact_form_url', home_url('/conta
 		<div class="lft-register-card">
 			<h2 class="lft-register-title">ログイン</h2>
 
+			<?php if (apply_filters('lft_membership_show_login_notice', true)) : ?>
+				<div class="lft-login-notice" role="region" aria-label="お知らせ">
+					<p class="lft-login-notice__title"><?php echo esc_html('【重要】新システムへの移行に伴うパスワード設定のお願い'); ?></p>
+					<div class="lft-login-notice__body">
+						<p><?php echo esc_html('6月1日付で、ご登録のメールアドレス宛に「【要対応】会員専用ページ：パスワード設定のご案内」というメールをお送りしております。'); ?></p>
+						<p><?php echo esc_html('まだ設定がお済みでない方は、メール内のURLよりパスワードの本登録をお願いいたします。'); ?></p>
+						<p class="lft-login-notice__note"><?php echo esc_html('※メールが届いていない場合は、迷惑メールフォルダをご確認いただくか、事務局までご連絡ください。'); ?></p>
+					</div>
+				</div>
+			<?php endif; ?>
+
 			<?php if ($login_error) : ?>
 				<p class="lft-register-errors"><?php echo esc_html($login_error); ?></p>
 			<?php endif; ?>

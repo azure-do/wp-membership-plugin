@@ -82,6 +82,39 @@ body.lft-membership-register-page {
   text-align: center;
 }
 
+/* ログイン画面の一時お知らせ（移行案内など） */
+.lft-login-notice {
+  margin: 0 0 18px;
+  padding: 14px 16px;
+  background: #f0f4ff;
+  border: 1px solid #c5d4f0;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.65;
+  color: #2d2a35;
+  text-align: left;
+}
+
+.lft-login-notice__title {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #16285a;
+}
+
+.lft-login-notice__body p {
+  margin: 0 0 8px;
+}
+
+.lft-login-notice__body p:last-child {
+  margin-bottom: 0;
+}
+
+.lft-login-notice__note {
+  font-size: 12px;
+  color: #5a5568;
+}
+
 .lft-register-errors {
   margin: 0 0 16px;
   padding: 12px;
