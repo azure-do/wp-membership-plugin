@@ -82,28 +82,34 @@ body.lft-membership-register-page {
   text-align: center;
 }
 
-/* ログイン画面の一時お知らせ（移行案内など） */
+/* ログイン画面：ロゴとカードの間に出すアラート（一時お知らせ） */
 .lft-login-notice {
-  margin: 0 0 18px;
+  margin: 0 0 20px;
   padding: 14px 16px;
-  background: #f0f4ff;
-  border: 1px solid #c5d4f0;
   border-radius: 8px;
   font-size: 13px;
   line-height: 1.65;
-  color: #2d2a35;
   text-align: left;
+}
+
+.lft-login-notice--alert {
+  background: #fff5f5;
+  border: 1px solid #fecaca;
+  box-shadow: 0 1px 0 rgba(185, 28, 28, 0.06);
+  color: #7f1d1d;
 }
 
 .lft-login-notice__title {
   margin: 0 0 10px;
   font-size: 14px;
   font-weight: 700;
-  color: #16285a;
+  color: #b91c1c;
 }
 
 .lft-login-notice__body p {
-  margin: 0 0 8px;
+  margin: 0 0 8px;  
+  color: #991b1b;
+  font-size: 12px;
 }
 
 .lft-login-notice__body p:last-child {
@@ -112,7 +118,7 @@ body.lft-membership-register-page {
 
 .lft-login-notice__note {
   font-size: 12px;
-  color: #5a5568;
+  color: #9f1239;
 }
 
 .lft-register-errors {
